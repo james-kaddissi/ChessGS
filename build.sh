@@ -1,3 +1,5 @@
 #!/bin/bash
 mkdir -p build
-g++ -std=c++11 -o build/engine engine.cpp
+CPP_FILES=$(find src -name "*.cpp")
+
+g++ -std=c++11 -I./include -o build/engine $CPP_FILES
