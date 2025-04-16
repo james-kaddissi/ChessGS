@@ -3,7 +3,7 @@ mkdir -p build
 
 INCLUDES="-I./include -I/opt/homebrew/include"
 LDFLAGS="-L/opt/homebrew/lib"
-LIBS="-lSDL2"
+LIBS="-lSDL2 -lSDL2_image -lSDL2_ttf"
 CPP_FILES=$(find src -name "*.cpp")
 
 OBJECTS=""

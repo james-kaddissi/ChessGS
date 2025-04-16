@@ -4,33 +4,23 @@
 
 int main()
 {
-    try {
-        Window window("Chess Game", 600, 600);
-        bool initialized = window.Initialize();
+    ChessEngine::initialize();
 
-        if (!initialized) {
-            std::cerr << "Failed to initialize window." << std::endl;
-            return -1;
-        }
-        window.RenderLoop();
-
-        return 0;
-    } catch (const std::exception &e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
-        return -1;
+    Window window("Chess Game", 800, 640);
+    
+    if (!window.Initialize()) {
+        std::cerr << "Failed to initialize window" << std::endl;
+        return 1;
     }
-    // ChessEngine engine;
+    
+    std::cout << "Chess game initialized successfully!" << std::endl;
+    std::cout << "Controls:" << std::endl;
+    std::cout << "  - Click on a piece to select it" << std::endl;
+    std::cout << "  - Click on a highlighted square to move the selected piece" << std::endl;
+    std::cout << "  - Press 'U' to undo a move" << std::endl;
+    std::cout << "  - Press 'ESC' to quit" << std::endl;
+    
+    window.RenderLoop();
 
-    // engine.printBoard();
-
-    // Move move(E2, E4);
-
-    // if (engine.makeMove(move))
-    // {
-    //     engine.printBoard();
-    // } else {
-    //     std::cout << "Issue with makeMove" << std::endl;
-    // }
-
-    // return 0;
+    return 0;
 }
