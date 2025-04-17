@@ -177,7 +177,7 @@ int ChessEngine::count_material(Color color) {
 
 int ChessEngine::search(int depth, int alpha, int beta) {
   if (depth == 0) {
-    eval();
+    return eval();
   }
 
   std::vector<Move> moves = generateLegalMoves();
