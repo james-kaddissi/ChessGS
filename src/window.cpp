@@ -203,7 +203,7 @@ void Window::Render()
         }
     }
     
-    // highlitghting
+    // highlighting
     DrawMoveHighlights(squareSize, squareSize);
     
     // piece rendering
@@ -285,6 +285,23 @@ void Window::DrawPieces(int squareWidth, int squareHeight)
             }
         }
     }
+}
+
+bool isCapture(const Move& move) {
+    return (move.flags() & CAPTURE) != 0 || 
+           move.flags() == EN_PASSANT || 
+           move.flags() == PC_KNIGHT || 
+           move.flags() == PC_BISHOP || 
+           move.flags() == PC_ROOK || 
+           move.flags() == PC_QUEEN;
+}
+
+Square getTo(const Move& move) {
+    return move.to();
+}
+
+Square getFrom(const Move& move) {
+    return move.from();
 }
 
 void Window::DrawMoveHighlights(int squareWidth, int squareHeight)

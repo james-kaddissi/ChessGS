@@ -8,6 +8,10 @@
 #include "chess_types.h"
 #include "engine.h"
 
+bool isCapture(const Move& move);
+Square getTo(const Move& move);
+Square getFrom(const Move& move);
+
 class Window {
 public:
     Window(const std::string &title, int width, int height);
@@ -54,7 +58,6 @@ private:
     bool texturesLoaded = false;
 
     ChessEngine engine;
-    
     Square selectedSquare = NO_SQ;
     std::vector<Move> legalMoves;
     bool isPieceSelected = false;

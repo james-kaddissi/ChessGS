@@ -2,65 +2,31 @@
 
 #include "chess_types.h"
 #include "bitboard.h"
-#include <vector>
 #include <string>
-#include <array>
+#include <vector>
 
 class ChessEngine {
-private:
-    Bitboard pieces[2][6];
-    Bitboard colorBitboards[2];
-    Bitboard occupiedSquares;
-
-    Color sideToMove;
-    Square enPassantSquare;
-    int castlingRights;
-    int halfMoveClock;
-    int fullMoveNumber;
-    
-    std::array<UndoInfo, 1024> history;
-    int historyIndex = 0;
-
-    bool isSquare(Square square) const;
-    bool isSquareAttacked(Square square, Color attacker) const;
-    
-    
-    Bitboard getPinnedPieces(Color kingColor) const;
-    
-    void addPiece(Square sq, PieceType pt, Color c);
-    void removePiece(Square sq, PieceType pt, Color c);
-    void movePiece(Square from, Square to, PieceType pt, Color c);
-    
-    std::vector<Move> generateCapturesAndPromotions() const;
-    std::vector<Move> generateQuietMoves() const;
-
 public:
     ChessEngine();
     ~ChessEngine();
     
+    // setup operations and board
     void resetToStartingPosition();
+    PieceType getPieceAt(Square sq, Color& color);
     
-    Bitboard getPieces(Color color, PieceType type) const;
-    Bitboard getColorPieces(Color color) const;
-    Bitboard getOccupiedSquares() const;
-    PieceType getPieceAt(Square sq, Color &outColor) const;
-    
-    bool makeMove(Move move);
+    // generating moves from PositionManager
+    std::vector<Move> generateLegalMoves();
+    bool makeMove(const Move& move);
     void unmakeMove();
+    // game state
+    Color getSideToMove() const;
+    bool isInCheck(Color side) const;
+    bool isCheckmate() const;
+    bool isStalemate() const;
     
-    std::vector<Move> generateLegalMoves() const;
-    std::vector<Move> generatePseudoLegalMoves() const;
+    // formatting moves
+    std::string moveToString(const Move& move) const;
     
-    bool isLegalMove(Move move) const;
-    bool isInCheck(Color color) const;
-    void printBoard() const;
-    
-    std::string squareToString(Square square) const;
-    std::string moveToString(Move move) const;
-    Move parseMove(const std::string& moveStr) const;
-    
-    // Added getter for current side to move
-    Color getSideToMove() const { return sideToMove; }
-    
-    static void initialize();
-};
+private:
+    PositionManager position;
+}; 
