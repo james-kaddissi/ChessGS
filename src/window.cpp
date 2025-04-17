@@ -1,4 +1,5 @@
 #include "window.h"
+#include "evaluation.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -434,6 +435,12 @@ void Window::DrawDebugPanel()
     }
     
     RenderText(stateInfo, startX, startY, white);
+
+    // eval display
+    int evaluation = eval(engine.getPosition());
+    std::ostringstream evalStream;
+    evalStream << "EVAL: (" << (engine.getPosition().turn() == WHITE ? "WHITE" : "BLACK") << ") " << std::fixed << std::setprecision(2) << evaluation / 100.0;
+    RenderText(evalStream.str(), startX, startY + 20, white);
 }
 
 void Window::RenderText(const std::string& text, int x, int y, SDL_Color color)

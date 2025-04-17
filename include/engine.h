@@ -13,6 +13,7 @@ public:
     // setup operations and board
     void resetToStartingPosition();
     PieceType getPieceAt(Square sq, Color& color);
+    PositionManager getPosition();
     
     // generating moves from PositionManager
     std::vector<Move> generateLegalMoves();

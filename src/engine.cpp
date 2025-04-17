@@ -24,6 +24,10 @@ PieceType ChessEngine::getPieceAt(Square sq, Color& color) {
     return piece_type(piece);
 }
 
+PositionManager ChessEngine::getPosition() {
+    return position;
+}
+
 std::vector<Move> ChessEngine::generateLegalMoves() {
     std::vector<Move> moves;
     
