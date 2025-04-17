@@ -24,10 +24,6 @@ PieceType ChessEngine::getPieceAt(Square sq, Color& color) {
     return piece_type(piece);
 }
 
-PositionManager ChessEngine::getPosition() {
-    return position;
-}
-
 std::vector<Move> ChessEngine::generateLegalMoves() {
     std::vector<Move> moves;
     
@@ -183,7 +179,7 @@ int ChessEngine::search(int depth, int alpha, int beta) {
   std::vector<Move> moves = generateLegalMoves();
   if (moves.size() == 0) {
     if (isInCheck(position.turn())) {
-        return -std::numeric_limits<int>::infinity(); // checkmate
+        return std::numeric_limits<int>::min(); // checkmate
     }
     return 0; // stalemate
   }
@@ -199,4 +195,40 @@ int ChessEngine::search(int depth, int alpha, int beta) {
   }
 
   return alpha;
+}
+
+Move ChessEngine::getBestMove(int depth) {
+    int alpha = std::numeric_limits<int>::min();
+    int beta = std::numeric_limits<int>::max();
+    Move bestMove = NULL;
+    int bestEval = std::numeric_limits<int>::min();
+
+    std::vector<Move> moves = generateLegalMoves();
+    std::cout << "Legal moves at depth " << depth << ":\n";
+    for (const auto& m : moves) {
+        std::cout << moveToString(m) << "\n";
+    }
+
+    for (auto move : moves) {
+        makeMove(move);
+        int evaluation = -search(depth - 1, -beta, -alpha);
+        unmakeMove();
+
+        std::cout << "Move " << moveToString(move) << " has evaluation " << evaluation << "\n";
+
+        if (evaluation > bestEval) {
+            bestEval = evaluation;
+            bestMove = move;
+        }
+
+        alpha = std::max(alpha, evaluation);
+    }
+
+    if (bestMove == NULL) {
+        std::cerr << "WARNING: No valid best move found at depth " << depth << "\n";
+    }
+
+    std::cout << "Best move: " << moveToString(bestMove) << " with evaluation " << bestEval << "\n";
+
+    return bestMove;
 }

@@ -13,7 +13,6 @@ public:
     // setup operations and board
     void resetToStartingPosition();
     PieceType getPieceAt(Square sq, Color& color);
-    PositionManager getPosition();
     
     // generating moves from PositionManager
     std::vector<Move> generateLegalMoves();
@@ -32,6 +31,7 @@ public:
     int eval();
     int count_material(Color color);
     int search(int depth, int alpha, int beta);
+    Move getBestMove(int depth);
     
 private:
     PositionManager position;

@@ -56,6 +56,10 @@
         "sstream": "cpp",
         "unordered_map": "cpp",
         "variant": "cpp",
-        "iomanip": "cpp"
+        "iomanip": "cpp",
+        "charconv": "cpp",
+        "complex": "cpp",
+        "execution": "cpp",
+        "algorithm": "cpp"
     }
 }
