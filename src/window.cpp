@@ -1,5 +1,4 @@
 #include "window.h"
-#include "evaluation.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -437,9 +436,11 @@ void Window::DrawDebugPanel()
     RenderText(stateInfo, startX, startY, white);
 
     // eval display
-    int evaluation = eval(engine.getPosition());
+    int evaluation = engine.eval();
+    // int evaluation = engine.search(1, -std::numeric_limits<int>::infinity(), std::numeric_limits<int>::infinity());
     std::ostringstream evalStream;
-    evalStream << "EVAL: (" << (engine.getPosition().turn() == WHITE ? "WHITE" : "BLACK") << ") " << std::fixed << std::setprecision(2) << evaluation / 100.0;
+    evalStream << "EVAL: (" << (engine.getSideToMove() == WHITE ? "WHITE" : "BLACK") << ") " 
+               << std::fixed << std::setprecision(2) << evaluation / 100.0;
     RenderText(evalStream.str(), startX, startY + 20, white);
 }
 

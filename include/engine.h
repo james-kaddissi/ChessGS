@@ -31,7 +31,7 @@ public:
     // evaluation functions
     int eval();
     int count_material(Color color);
-    int search(int depth);
+    int search(int depth, int alpha, int beta);
     
 private:
     PositionManager position;

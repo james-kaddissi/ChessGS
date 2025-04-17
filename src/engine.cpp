@@ -174,3 +174,29 @@ int ChessEngine::count_material(Color color) {
 
   return material;
 }
+
+int ChessEngine::search(int depth, int alpha, int beta) {
+  if (depth == 0) {
+    eval();
+  }
+
+  std::vector<Move> moves = generateLegalMoves();
+  if (moves.size() == 0) {
+    if (isInCheck(position.turn())) {
+        return -std::numeric_limits<int>::infinity(); // checkmate
+    }
+    return 0; // stalemate
+  }
+
+  for (auto move : moves) {
+    makeMove(move);
+    int evaluation = -search(depth - 1, -beta, -alpha);
+    unmakeMove();
+    if (evaluation >= beta) {
+        return beta; // prune branch
+    }
+    alpha = std::max(alpha, evaluation);
+  }
+
+  return alpha;
+}
