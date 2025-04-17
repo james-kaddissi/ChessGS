@@ -27,6 +27,11 @@ public:
     
     // formatting moves
     std::string moveToString(const Move& move) const;
+
+    // evaluation functions
+    int eval();
+    int count_material(Color color);
+    int search(int depth);
     
 private:
     PositionManager position;
