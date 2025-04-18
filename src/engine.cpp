@@ -159,6 +159,10 @@ const int BISHOP_VALUE  = 300;
 const int ROOK_VALUE    = 500;
 const int QUEEN_VALUE   = 900;
 
+// tempo bonuses
+const int MG_TEMPO      = 10;
+const int EG_TEMPO      = 5;
+
 // pair bonuses / penalties
 const int BISHOP_PAIR   = 30;
 const int P_KNIGHT_PAIR = 10;
@@ -185,6 +189,15 @@ int ChessEngine::eval() {
 
     Score white = evaluate_color(WHITE);
     Score black = evaluate_color(BLACK);
+
+    // tempo bonus
+    if (position.turn() == WHITE) {
+        white.mg += MG_TEMPO;
+        white.eg += EG_TEMPO;
+    } else {
+        black.mg += MG_TEMPO;
+        white.eg += EG_TEMPO;
+    }
 
     Score total = white - black;
 
