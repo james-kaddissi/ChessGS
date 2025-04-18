@@ -295,7 +295,6 @@ Move ChessEngine::getBestMove(int depth) {
     int bestEval = -INF;
 
     std::vector<Move> moves = generateLegalMoves();
-    std::cout << "Legal moves at depth " << depth << ":\n";
     for (const auto& m : moves) {
         std::cout << moveToString(m) << "\n";
     }
@@ -304,8 +303,6 @@ Move ChessEngine::getBestMove(int depth) {
         makeMove(move);
         int evaluation = -search(depth - 1, -beta, -alpha);
         unmakeMove();
-
-        std::cout << "Move " << moveToString(move) << " has evaluation " << evaluation << "\n";
 
         if (evaluation > bestEval) {
             bestEval = evaluation;
