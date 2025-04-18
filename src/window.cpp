@@ -416,6 +416,8 @@ void Window::DrawMoveHistory()
     RenderText(turnStr, startX, y, yellow);
 }
 
+const int DEPTH = 5;
+
 void Window::DrawDebugPanel()
 {
     int startX = 20;
@@ -436,12 +438,11 @@ void Window::DrawDebugPanel()
     RenderText(stateInfo, startX, startY, white);
 
     // eval display
-    // int evaluation = engine.eval();
-    // int evaluation = engine.search(3, std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
-    // std::ostringstream evalStream;
-    // evalStream << "EVAL: (" << (engine.getSideToMove() == WHITE ? "WHITE" : "BLACK") << ") " 
-    //            << std::fixed << std::setprecision(2) << evaluation / 100.0;
-    // RenderText(evalStream.str(), startX, startY + 20, white);
+    int evaluation = engine.search(5, -1000000, 1000000);
+    std::ostringstream evalStream;
+    evalStream << "EVAL: (" << (engine.getSideToMove() == WHITE ? "WHITE" : "BLACK") << ") " 
+               << std::fixed << std::setprecision(2) << evaluation / 100.0;
+    RenderText(evalStream.str(), startX, startY + 20, white);
 }
 
 void Window::RenderText(const std::string& text, int x, int y, SDL_Color color)
@@ -553,7 +554,7 @@ void Window::HandleBoardClick(int mouseX, int mouseY)
                 engine.makeMove(move);
 
                 // let engine respond (Black)
-                Move engineMove = engine.getBestMove(2);
+                Move engineMove = engine.getBestMove(DEPTH);
                 AddMoveToHistory(engineMove);
                 engine.makeMove(engineMove);
                 
