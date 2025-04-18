@@ -28,6 +28,7 @@ public:
     std::string moveToString(const Move& move) const;
 
     // evaluation functions
+    Bitboard getFriendlyPieces(Color color) const;
     int eval();
     int count_material(Color color);
     int evalPawns(Color color);
