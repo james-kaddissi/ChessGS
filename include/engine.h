@@ -30,6 +30,11 @@ public:
     // evaluation functions
     int eval();
     int count_material(Color color);
+    int evalPawns(Color color);
+    int evalKnights(Color color);
+    int evalBishops(Color color);
+    int evalRooks(Color color);
+    int evalQueens(Color color);
     int search(int depth, int alpha, int beta);
     Move getBestMove(int depth);
     

@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "pst.h"
 #include <sstream>
 #include <iostream>
 #include <vector>
@@ -153,9 +154,13 @@ const int BISHOP_VALUE = 300;
 const int ROOK_VALUE = 500;
 const int QUEEN_VALUE = 900;
 
+inline int flip_rank(int sq) {
+    return sq ^ 56; // flips vertical rank (0-63)
+}
+
 int ChessEngine::eval() {
-  int whiteEval = count_material(WHITE);
-  int blackEval = count_material(BLACK);
+  int whiteEval = count_material(WHITE) + evalPawns(WHITE) + evalKnights(WHITE) + evalBishops(WHITE) + evalRooks(WHITE) + evalQueens(WHITE);
+  int blackEval = count_material(BLACK) + evalPawns(BLACK) + evalKnights(BLACK) + evalBishops(BLACK) + evalRooks(BLACK) + evalQueens(BLACK);
 
   int evaluation = whiteEval - blackEval;
 
@@ -173,6 +178,86 @@ int ChessEngine::count_material(Color color) {
   material += sparse_pop_count(position.bitboard_of(color, QUEEN)) * QUEEN_VALUE;
 
   return material;
+}
+
+int ChessEngine::evalPawns(Color color) {
+    Bitboard pawns = position.bitboard_of(color, PAWN);
+    int evaluation = 0;
+
+    while (pawns) {
+        Square sq = pop_lsb(&pawns);
+
+        int index = (color == WHITE) ? sq : flip_rank(sq);
+        evaluation += PAWN_PST[index];
+
+        // TODO: add mobility bonus
+    }
+
+    return evaluation;
+}
+
+int ChessEngine::evalKnights(Color color) {
+    Bitboard knights = position.bitboard_of(color, KNIGHT);
+    int evaluation = 0;
+
+    while (knights) {
+        Square sq = pop_lsb(&knights);
+
+        int index = (color == WHITE) ? sq : flip_rank(sq);
+        evaluation += KNIGHT_PST[index];
+
+        // TODO: add mobility bonus
+    }
+
+    return evaluation;
+}
+
+int ChessEngine::evalBishops(Color color) {
+    Bitboard bishops = position.bitboard_of(color, BISHOP);
+    int evaluation = 0;
+
+    while (bishops) {
+        Square sq = pop_lsb(&bishops);
+
+        int index = (color == WHITE) ? sq : flip_rank(sq);
+        evaluation += BISHOP_PST[index];
+
+        // TODO: add mobility bonus
+    }
+
+    return evaluation;
+}
+
+int ChessEngine::evalRooks(Color color) {
+    Bitboard rooks = position.bitboard_of(color, ROOK);
+    int evaluation = 0;
+
+    while (rooks) {
+        Square sq = pop_lsb(&rooks);
+
+        int index = (color == WHITE) ? sq : flip_rank(sq);
+        evaluation += ROOK_PST[index];
+
+        // TODO: add mobility bonus
+    }
+
+    return evaluation;
+}
+
+int ChessEngine::evalQueens(Color color) {
+    Bitboard queens = position.bitboard_of(color, QUEEN);
+    int evaluation = 0;
+
+    while (queens) {
+        Square sq = pop_lsb(&queens);
+
+        int index = (color == WHITE) ? sq : flip_rank(sq);
+        evaluation += BISHOP_PST[index];
+
+        // TODO: add mobility bonus
+    }
+
+    return evaluation;
 }
 
 int ChessEngine::search(int depth, int alpha, int beta) {
