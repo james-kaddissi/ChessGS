@@ -416,7 +416,7 @@ void Window::DrawMoveHistory()
     RenderText(turnStr, startX, y, yellow);
 }
 
-const int DEPTH = 5;
+const int DEPTH = 3;
 
 void Window::DrawDebugPanel()
 {
