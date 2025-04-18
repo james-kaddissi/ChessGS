@@ -1,6 +1,9 @@
 #include "engine.h"
 #include <sstream>
 #include <iostream>
+#include <vector>
+
+std::vector<Move> moveStack;
 
 ChessEngine::ChessEngine() {
     resetToStartingPosition();
@@ -43,6 +46,8 @@ std::vector<Move> ChessEngine::generateLegalMoves() {
 }
 
 bool ChessEngine::makeMove(const Move& move) {
+    moveStack.push_back(move);
+
     if (position.turn() == WHITE) {
         position.play<WHITE>(move);
     } else {
@@ -52,23 +57,19 @@ bool ChessEngine::makeMove(const Move& move) {
 }
 
 void ChessEngine::unmakeMove() {
-    if (position.ply() <= 0) {
+    if (moveStack.empty()) {
+        std::cout << "Move stack is empty, nothing to undo.\n";
         return;
     }
-    
-    Bitboard lastMoveEntry = position.history[position.ply()].entry;
-    if (lastMoveEntry == 0) {
-        return;
-    }
-    
-    Square to = bsf(lastMoveEntry);
-    lastMoveEntry &= ~(1ULL << to);
-    Square from = bsf(lastMoveEntry);
-    
-    Move lastMove(from, to);
-    
-    if (position.turn() == WHITE) {
+
+    Move lastMove = moveStack.back();
+    moveStack.pop_back();
+
+    Color turnBeforeUndo = position.turn();
+
+    if (turnBeforeUndo == WHITE) {
         position.undo<BLACK>(lastMove);
+    } else {
         position.undo<WHITE>(lastMove);
     }
 }
@@ -143,6 +144,9 @@ std::string ChessEngine::moveToString(const Move& move) const {
 
 */
 
+const int MATE_SCORE = 100000;
+const int INF = 1000000;
+
 const int PAWN_VALUE = 100;
 const int KNIGHT_VALUE = 300;
 const int BISHOP_VALUE = 300;
@@ -179,7 +183,7 @@ int ChessEngine::search(int depth, int alpha, int beta) {
   std::vector<Move> moves = generateLegalMoves();
   if (moves.size() == 0) {
     if (isInCheck(position.turn())) {
-        return std::numeric_limits<int>::min(); // checkmate
+        return -MATE_SCORE + depth; // checkmate
     }
     return 0; // stalemate
   }
@@ -198,10 +202,12 @@ int ChessEngine::search(int depth, int alpha, int beta) {
 }
 
 Move ChessEngine::getBestMove(int depth) {
-    int alpha = std::numeric_limits<int>::min();
-    int beta = std::numeric_limits<int>::max();
+    PositionManager originalPosition = position;
+
+    int alpha = -INF;
+    int beta = INF;
     Move bestMove = NULL;
-    int bestEval = std::numeric_limits<int>::min();
+    int bestEval = -INF;
 
     std::vector<Move> moves = generateLegalMoves();
     std::cout << "Legal moves at depth " << depth << ":\n";
@@ -223,6 +229,8 @@ Move ChessEngine::getBestMove(int depth) {
 
         alpha = std::max(alpha, evaluation);
     }
+
+    position = originalPosition;
 
     if (bestMove == NULL) {
         std::cerr << "WARNING: No valid best move found at depth " << depth << "\n";
