@@ -145,18 +145,31 @@ std::string ChessEngine::moveToString(const Move& move) const {
 
 */
 
+/****************************************************************
+*  Parameters                                                   *
+****************************************************************/
+// score bounds
 const int MATE_SCORE    = 100000;
 const int INF           = 1000000;
 
+// piece values
 const int PAWN_VALUE    = 100;
 const int KNIGHT_VALUE  = 300;
 const int BISHOP_VALUE  = 300;
 const int ROOK_VALUE    = 500;
 const int QUEEN_VALUE   = 900;
 
+// pair bonuses / penalties
 const int BISHOP_PAIR   = 30;
 const int P_KNIGHT_PAIR = 10;
 const int P_ROOK_PAIR   = 20;
+
+// game phase weight
+int gamePhase;
+const int PHASE_KNIGHT  = 1;
+const int PHASE_BISHOP  = 1;
+const int PHASE_ROOK    = 2;
+const int PHASE_QUEEN   = 4;
 
 inline int flip_rank(int sq) {
     return sq ^ 56; // flips vertical rank (0-63)
@@ -167,57 +180,94 @@ Bitboard ChessEngine::getFriendlyPieces(Color color) const {
 }
 
 int ChessEngine::eval() {
-  int whiteEval = count_material(WHITE) + evalPawns(WHITE) + evalKnights(WHITE) + evalBishops(WHITE) + evalRooks(WHITE) + evalQueens(WHITE);
-  int blackEval = count_material(BLACK) + evalPawns(BLACK) + evalKnights(BLACK) + evalBishops(BLACK) + evalRooks(BLACK) + evalQueens(BLACK);
+    int gamePhase = game_phase(); // 0 (endgame) to 24 (opening)
+    int maxPhase = PHASE_KNIGHT * 4 + PHASE_BISHOP * 4 + PHASE_ROOK * 4 + PHASE_QUEEN * 2; // = 24
 
-  int evaluation = whiteEval - blackEval;
+    Score white = evaluate_color(WHITE);
+    Score black = evaluate_color(BLACK);
 
-  int perspective = position.turn() == WHITE ? 1 : -1;
-  return evaluation * perspective;
+    Score total = white - black;
+
+    // phase interpolation: blend midgame and endgame
+    int mgScore = total.mg * gamePhase;
+    int egScore = total.eg * (maxPhase - gamePhase);
+    int blended = (mgScore + egScore) / maxPhase;
+
+    int perspective = (position.turn() == WHITE) ? 1 : -1;
+    return blended * perspective;
+}
+
+Score ChessEngine::evaluate_color(Color color) {
+    Score eval;
+
+    eval += count_material(color);
+    eval += evalPawns(color);
+    eval += evalKnights(color);
+    eval += evalBishops(color);
+    eval += evalRooks(color);
+    eval += evalQueens(color);
+
+    return eval;
 }
 
 int ChessEngine::count_material(Color color) {
-  int material = 0;
+    int material = 0;
 
-  material += sparse_pop_count(position.bitboard_of(color, PAWN)) * PAWN_VALUE;
-  material += sparse_pop_count(position.bitboard_of(color, KNIGHT)) * KNIGHT_VALUE;
-  material += sparse_pop_count(position.bitboard_of(color, BISHOP)) * BISHOP_VALUE;
-  material += sparse_pop_count(position.bitboard_of(color, ROOK)) * ROOK_VALUE;
-  material += sparse_pop_count(position.bitboard_of(color, QUEEN)) * QUEEN_VALUE;
+    material += sparse_pop_count(position.bitboard_of(color, PAWN)) * PAWN_VALUE;
+    material += sparse_pop_count(position.bitboard_of(color, KNIGHT)) * KNIGHT_VALUE;
+    material += sparse_pop_count(position.bitboard_of(color, BISHOP)) * BISHOP_VALUE;
+    material += sparse_pop_count(position.bitboard_of(color, ROOK)) * ROOK_VALUE;
+    material += sparse_pop_count(position.bitboard_of(color, QUEEN)) * QUEEN_VALUE;
 
-  return material;
+    return material;
 }
 
-int ChessEngine::evalPawns(Color color) {
+int ChessEngine::game_phase() {
+    int phase = 0;
+
+    phase += sparse_pop_count(position.bitboard_of(WHITE, KNIGHT) | position.bitboard_of(BLACK, KNIGHT)) * PHASE_KNIGHT;
+    phase += sparse_pop_count(position.bitboard_of(WHITE, BISHOP) | position.bitboard_of(BLACK, BISHOP)) * PHASE_BISHOP;
+    phase += sparse_pop_count(position.bitboard_of(WHITE, ROOK) | position.bitboard_of(BLACK, ROOK)) * PHASE_ROOK;
+    phase += sparse_pop_count(position.bitboard_of(WHITE, QUEEN) | position.bitboard_of(BLACK, QUEEN)) * PHASE_QUEEN;
+
+    return phase;
+}
+
+Score ChessEngine::evalPawns(Color color) {
+    Score score;
     Bitboard pawns = position.bitboard_of(color, PAWN);
-    int evaluation = 0;
 
     while (pawns) {
         Square sq = pop_lsb(&pawns);
 
         int index = (color == WHITE) ? sq : flip_rank(sq);
-        evaluation += PAWN_PST[index];
+
+        score.mg += MG_PAWN_PST[index];
+        score.eg += EG_PAWN_PST[index];
 
         // TODO: add mobility bonus
     }
 
-    return evaluation;
+    return score;
 }
 
-int ChessEngine::evalKnights(Color color) {
+Score ChessEngine::evalKnights(Color color) {
+    Score score;
     Bitboard knights = position.bitboard_of(color, KNIGHT);
-    int evaluation = 0;
 
     // pair bonus
     if (sparse_pop_count(knights) > 1) {
-        evaluation -= P_KNIGHT_PAIR;
+        score.mg -= P_KNIGHT_PAIR;
+        score.eg -= P_KNIGHT_PAIR;
     }
 
     while (knights) {
         Square sq = pop_lsb(&knights);
 
         int index = (color == WHITE) ? sq : flip_rank(sq);
-        evaluation += KNIGHT_PST[index];
+
+        score.mg += MG_KNIGHT_PST[index];
+        score.eg += EG_KNIGHT_PST[index];
 
         /****************************************************************
         *  Evaluate mobility. We try to do it in such a way             *
@@ -229,27 +279,30 @@ int ChessEngine::evalKnights(Color color) {
         // check how many squares are free (not colliding with friendly pieces)
         int mobility = sparse_pop_count(attack & getFriendlyPieces(color));
 
-        evaluation = 4 * (mobility - 4);
+        score.mg += 4 * (mobility - 4);
+        score.eg += 4 * (mobility - 4);
     }
 
-    return evaluation;
+    return score;
 }
 
-int ChessEngine::evalBishops(Color color) {
+Score ChessEngine::evalBishops(Color color) {
+    Score score;
     Bitboard bishops = position.bitboard_of(color, BISHOP);
-
-    int evaluation = 0;
 
     // pair bonus
     if (sparse_pop_count(bishops) > 1) {
-        evaluation += BISHOP_PAIR;
+        score.mg += BISHOP_PAIR;
+        score.eg += BISHOP_PAIR;
     }
 
     while (bishops) {
         Square sq = pop_lsb(&bishops);
 
         int index = (color == WHITE) ? sq : flip_rank(sq);
-        evaluation += BISHOP_PST[index];
+        
+        score.mg += MG_BISHOP_PST[index];
+        score.eg += EG_BISHOP_PST[index];
 
         /****************************************************************
         *  Collect data about mobility                                  *
@@ -258,27 +311,31 @@ int ChessEngine::evalBishops(Color color) {
         Bitboard attack = get_bishop_attacks(sq, occ);
 
         int mobility = sparse_pop_count(attack & ~getFriendlyPieces(color));
-        evaluation += 3 * (mobility - 7);
+
+        score.mg += 3 * (mobility - 7);
+        score.eg += 3 * (mobility - 7);
     }
 
-    return evaluation;
+    return score;
 }
 
-int ChessEngine::evalRooks(Color color) {
+Score ChessEngine::evalRooks(Color color) {
+    Score score;
     Bitboard rooks = position.bitboard_of(color, ROOK);
-
-    int evaluation = 0;
 
     // pair bonus
     if (sparse_pop_count(rooks) > 1) {
-        evaluation -= P_ROOK_PAIR;
+        score.mg -= P_ROOK_PAIR;
+        score.eg -= P_ROOK_PAIR;
     }
 
     while (rooks) {
         Square sq = pop_lsb(&rooks);
 
         int index = (color == WHITE) ? sq : flip_rank(sq);
-        evaluation += ROOK_PST[index];
+
+        score.mg += MG_ROOK_PST[index];
+        score.eg += EG_ROOK_PST[index];
 
         /****************************************************************
         *  Collect data about mobility                                  *
@@ -287,22 +344,25 @@ int ChessEngine::evalRooks(Color color) {
         Bitboard attack = get_rook_attacks(sq, occ);
 
         int mobility = sparse_pop_count(attack & ~getFriendlyPieces(color));
-        evaluation += 3 * (mobility - 7);
+        
+        score.mg += 2 * (mobility - 7);
+        score.eg += 4 * (mobility - 7);
     }
 
-    return evaluation;
+    return score;
 }
 
-int ChessEngine::evalQueens(Color color) {
+Score ChessEngine::evalQueens(Color color) {
+    Score score;
     Bitboard queens = position.bitboard_of(color, QUEEN);
-
-    int evaluation = 0;
 
     while (queens) {
         Square sq = pop_lsb(&queens);
 
         int index = (color == WHITE) ? sq : flip_rank(sq);
-        evaluation += BISHOP_PST[index];
+
+        score.mg += MG_QUEEN_PST[index];
+        score.eg += EG_QUEEN_PST[index];
 
         /****************************************************************
         *  Collect data about mobility                                  *
@@ -311,36 +371,38 @@ int ChessEngine::evalQueens(Color color) {
         Bitboard attack = get_rook_attacks(sq, occ) | get_bishop_attacks(sq, occ);
 
         int mobility = sparse_pop_count(attack & ~getFriendlyPieces(color));
-        evaluation += 2 * (mobility - 14);
+
+        score.mg += 1 * (mobility - 14);
+        score.mg += 2 * (mobility - 14);
     }
 
-    return evaluation;
+    return score;
 }
 
 int ChessEngine::search(int depth, int alpha, int beta) {
-  if (depth == 0) {
-    return eval();
-  }
-
-  std::vector<Move> moves = generateLegalMoves();
-  if (moves.size() == 0) {
-    if (isInCheck(position.turn())) {
-        return -MATE_SCORE + depth; // checkmate
+    if (depth == 0) {
+        return eval();
     }
-    return 0; // stalemate
-  }
 
-  for (auto move : moves) {
-    makeMove(move);
-    int evaluation = -search(depth - 1, -beta, -alpha);
-    unmakeMove();
-    if (evaluation >= beta) {
-        return beta; // prune branch
+    std::vector<Move> moves = generateLegalMoves();
+    if (moves.size() == 0) {
+        if (isInCheck(position.turn())) {
+            return -MATE_SCORE + depth; // checkmate
+        }
+        return 0; // stalemate
     }
-    alpha = std::max(alpha, evaluation);
-  }
 
-  return alpha;
+    for (auto move : moves) {
+        makeMove(move);
+        int evaluation = -search(depth - 1, -beta, -alpha);
+        unmakeMove();
+        if (evaluation >= beta) {
+            return beta; // prune branch
+        }
+        alpha = std::max(alpha, evaluation);
+    }
+
+    return alpha;
 }
 
 Move ChessEngine::getBestMove(int depth) {
