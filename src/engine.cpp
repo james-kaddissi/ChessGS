@@ -274,6 +274,8 @@ Score ChessEngine::evalKnights(Color color) {
         score.eg -= P_KNIGHT_PAIR;
     }
 
+    int totalMobility = 0;
+    int attack = 0;
     while (knights) {
         Square sq = pop_lsb(&knights);
 
@@ -287,14 +289,29 @@ Score ChessEngine::evalKnights(Color color) {
         *  that zero represents average mobility, but our               *
         *  formula of doing so is a puer guess.                         *
         ****************************************************************/
-        Bitboard attack = KNIGHT_ATTACKS[sq];
+        Bitboard attacks = KNIGHT_ATTACKS[sq];
 
         // check how many squares are free (not colliding with friendly pieces)
-        int mobility = sparse_pop_count(attack & getFriendlyPieces(color));
+        Bitboard reachable = attacks & ~getFriendlyPieces(color);
+        totalMobility += sparse_pop_count(reachable);
 
-        score.mg += 4 * (mobility - 4);
-        score.eg += 4 * (mobility - 4);
+        /****************************************************************
+        *  Collect data about king attacks                              *
+        ****************************************************************/
+        Color enemy = (color == WHITE) ? BLACK : WHITE;
+        Bitboard enemyKing = position.bitboard_of(enemy, KING);
+        Bitboard enemyKingZone = KING_ATTACKS[sq];
+        Bitboard attacKing = enemyKingZone & reachable; // hehe get it
+        attack += sparse_pop_count(attacKing);
     }
+
+    // mobility bonus
+    score.mg += 4 * (totalMobility - 4);
+    score.eg += 4 * (totalMobility - 4);
+
+    // attack king bonus
+    score.mg += 2 * attack;
+    score.eg += 2 * attack;
 
     return score;
 }
@@ -309,6 +326,8 @@ Score ChessEngine::evalBishops(Color color) {
         score.eg += BISHOP_PAIR;
     }
 
+    int totalMobility = 0;
+    int attack = 0;
     while (bishops) {
         Square sq = pop_lsb(&bishops);
 
@@ -321,13 +340,28 @@ Score ChessEngine::evalBishops(Color color) {
         *  Collect data about mobility                                  *
         ****************************************************************/
         Bitboard occ = position.all_pieces<WHITE>() | position.all_pieces<BLACK>();
-        Bitboard attack = get_bishop_attacks(sq, occ);
+        Bitboard attacks = get_bishop_attacks(sq, occ);
 
-        int mobility = sparse_pop_count(attack & ~getFriendlyPieces(color));
+        Bitboard reachable = attacks & ~getFriendlyPieces(color);
+        totalMobility += sparse_pop_count(reachable);
 
-        score.mg += 3 * (mobility - 7);
-        score.eg += 3 * (mobility - 7);
+        /****************************************************************
+        *  Collect data about king attacks                              *
+        ****************************************************************/
+        Color enemy = (color == WHITE) ? BLACK : WHITE;
+        Bitboard enemyKing = position.bitboard_of(enemy, KING);
+        Bitboard enemyKingZone = KING_ATTACKS[sq];
+        Bitboard attacKing = enemyKingZone & reachable;
+        attack += sparse_pop_count(attacKing);
     }
+    
+    // mobility bonus
+    score.mg += 3 * (totalMobility - 7);
+    score.eg += 3 * (totalMobility - 7);
+
+    // attack king bonus
+    score.mg += 2 * attack;
+    score.eg += 2 * attack;
 
     return score;
 }
@@ -342,6 +376,8 @@ Score ChessEngine::evalRooks(Color color) {
         score.eg -= P_ROOK_PAIR;
     }
 
+    int totalMobility = 0;
+    int attack = 0;
     while (rooks) {
         Square sq = pop_lsb(&rooks);
 
@@ -354,13 +390,28 @@ Score ChessEngine::evalRooks(Color color) {
         *  Collect data about mobility                                  *
         ****************************************************************/
         Bitboard occ = position.all_pieces<WHITE>() | position.all_pieces<BLACK>();
-        Bitboard attack = get_rook_attacks(sq, occ);
+        Bitboard attacks = get_rook_attacks(sq, occ);
 
-        int mobility = sparse_pop_count(attack & ~getFriendlyPieces(color));
-        
-        score.mg += 2 * (mobility - 7);
-        score.eg += 4 * (mobility - 7);
+        Bitboard reachable = attacks & ~getFriendlyPieces(color);
+        totalMobility += sparse_pop_count(reachable);
+
+        /****************************************************************
+        *  Collect data about king attacks                              *
+        ****************************************************************/
+        Color enemy = (color == WHITE) ? BLACK : WHITE;
+        Bitboard enemyKing = position.bitboard_of(enemy, KING);
+        Bitboard enemyKingZone = KING_ATTACKS[sq];
+        Bitboard attacKing = enemyKingZone & reachable;
+        attack += sparse_pop_count(attacKing);
     }
+
+    // mobility bonus
+    score.mg += 2 * (totalMobility - 7);
+    score.eg += 4 * (totalMobility - 7);
+
+    // attack king bonus
+    score.mg += 3 * attack;
+    score.eg += 3 * attack;
 
     return score;
 }
@@ -369,6 +420,8 @@ Score ChessEngine::evalQueens(Color color) {
     Score score;
     Bitboard queens = position.bitboard_of(color, QUEEN);
 
+    int totalMobility = 0;
+    int attack = 0;
     while (queens) {
         Square sq = pop_lsb(&queens);
 
@@ -381,13 +434,28 @@ Score ChessEngine::evalQueens(Color color) {
         *  Collect data about mobility                                  *
         ****************************************************************/
         Bitboard occ = position.all_pieces<WHITE>() | position.all_pieces<BLACK>();
-        Bitboard attack = get_rook_attacks(sq, occ) | get_bishop_attacks(sq, occ);
+        Bitboard attacks = get_rook_attacks(sq, occ) | get_bishop_attacks(sq, occ);
 
-        int mobility = sparse_pop_count(attack & ~getFriendlyPieces(color));
+        Bitboard reachable = attacks & ~getFriendlyPieces(color);
+        totalMobility += sparse_pop_count(reachable);
 
-        score.mg += 1 * (mobility - 14);
-        score.mg += 2 * (mobility - 14);
+        /****************************************************************
+        *  Collect data about king attacks                              *
+        ****************************************************************/
+        Color enemy = (color == WHITE) ? BLACK : WHITE;
+        Bitboard enemyKing = position.bitboard_of(enemy, KING);
+        Bitboard enemyKingZone = KING_ATTACKS[sq];
+        Bitboard attacKing = enemyKingZone & reachable;
+        attack += sparse_pop_count(attacKing);
     }
+
+    // mobility bonus
+    score.mg += 1 * (totalMobility - 14);
+    score.mg += 2 * (totalMobility - 14);
+
+    // attack king bonus
+    score.mg += 4 * attack;
+    score.eg += 4 * attack;
 
     return score;
 }
