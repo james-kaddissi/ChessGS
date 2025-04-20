@@ -431,6 +431,23 @@ Score ChessEngine::evalQueens(Color color) {
         score.eg += EG_QUEEN_PST[index];
 
         /****************************************************************
+        *  A queen should not be developed too early                    *
+        ****************************************************************/
+        if (position.turn() == WHITE && rank_of(sq) > RANK2) {
+            if (position.at(B1) == WHITE_KNIGHT) score.mg -= 2; score.eg -= 2;
+            if (position.at(C1) == WHITE_BISHOP) score.mg -= 2; score.eg -= 2;
+            if (position.at(F1) == WHITE_BISHOP) score.mg -= 2; score.eg -= 2;
+            if (position.at(G1) == WHITE_KNIGHT) score.mg -= 2; score.eg -= 2;
+        }
+
+        if (position.turn() == BLACK && rank_of(sq) < RANK7) {
+            if (position.at(B8) == BLACK_KNIGHT) score.mg -= 2; score.eg -= 2;
+            if (position.at(C8) == BLACK_BISHOP) score.mg -= 2; score.eg -= 2;
+            if (position.at(F8) == BLACK_BISHOP) score.mg -= 2; score.eg -= 2;
+            if (position.at(G8) == BLACK_KNIGHT) score.mg -= 2; score.eg -= 2;
+        }
+
+        /****************************************************************
         *  Collect data about mobility                                  *
         ****************************************************************/
         Bitboard occ = position.all_pieces<WHITE>() | position.all_pieces<BLACK>();
