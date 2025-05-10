@@ -416,6 +416,8 @@ void Window::DrawMoveHistory()
     RenderText(turnStr, startX, y, yellow);
 }
 
+const int DEPTH = 3;
+
 void Window::DrawDebugPanel()
 {
     int startX = 20;
@@ -434,6 +436,14 @@ void Window::DrawDebugPanel()
     }
     
     RenderText(stateInfo, startX, startY, white);
+
+    // eval display
+    // HELLA lags the sim, commenting out for now until I find a better way to display
+    // int evaluation = engine.search(5, -1000000, 1000000);
+    // std::ostringstream evalStream;
+    // evalStream << "EVAL: (" << (engine.getSideToMove() == WHITE ? "WHITE" : "BLACK") << ") " 
+    //            << std::fixed << std::setprecision(2) << evaluation / 100.0;
+    // RenderText(evalStream.str(), startX, startY + 20, white);
 }
 
 void Window::RenderText(const std::string& text, int x, int y, SDL_Color color)
@@ -543,6 +553,11 @@ void Window::HandleBoardClick(int mouseX, int mouseY)
             if (getTo(move) == clickedSquare) {
                 AddMoveToHistory(move);
                 engine.makeMove(move);
+
+                // let engine respond (Black)
+                Move engineMove = engine.getBestMove(DEPTH);
+                AddMoveToHistory(engineMove);
+                engine.makeMove(engineMove);
                 
                 selectedSquare = NO_SQ;
                 isPieceSelected = false;
