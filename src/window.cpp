@@ -555,7 +555,7 @@ void Window::HandleBoardClick(int mouseX, int mouseY)
                 engine.makeMove(move);
 
                 // let engine respond (Black)
-                Move engineMove = engine.getBestMove(DEPTH);
+                Move engineMove = engine.getBestMoveWithTime(5000);
                 AddMoveToHistory(engineMove);
                 engine.makeMove(engineMove);
                 

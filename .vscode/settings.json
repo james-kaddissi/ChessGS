@@ -60,6 +60,7 @@
         "charconv": "cpp",
         "complex": "cpp",
         "execution": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "fstream": "cpp"
     }
 }

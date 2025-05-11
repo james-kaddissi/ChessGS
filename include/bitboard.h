@@ -44,13 +44,13 @@ class PositionManager {
 private:
 	Bitboard piece_bb[NPIECES];
 	Piece board[NSQUARES];
-	Color side_to_play;
-	int game_ply;
 	uint64_t hash;
 public:
 	UndoInfo history[256];
 	Bitboard checkers;
 	Bitboard pinned;
+	Color side_to_play;
+	int game_ply;
 	
 	PositionManager() : piece_bb{ 0 }, side_to_play(WHITE), game_ply(0), board{}, 
 		hash(0), pinned(0), checkers(0) {
