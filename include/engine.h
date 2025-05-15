@@ -4,6 +4,7 @@
 #include "bitboard.h"
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <SDL2/SDL.h>
 
 struct Score {
