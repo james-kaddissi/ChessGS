@@ -3,12 +3,17 @@
 #include <sstream>
 
 uint64_t zobrist::zobrist_table[NPIECES][NSQUARES];
+uint64_t zobrist::zobrist_side;
+uint64_t zobrist::zobrist_ep[8];
 
 void zobrist::initialise_zobrist_keys() {
 	PRNG rng(70026072);
 	for (int i = 0; i < NPIECES; i++)
 		for (int j = 0; j < NSQUARES; j++)
 			zobrist::zobrist_table[i][j] = rng.rand<uint64_t>();
+	zobrist::zobrist_side = rng.rand<uint64_t>();
+	for (int i = 0; i < 8; i++)
+		zobrist::zobrist_ep[i] = rng.rand<uint64_t>();
 }
 
 std::ostream& operator<< (std::ostream& os, const PositionManager& p) {
@@ -65,6 +70,14 @@ std::string PositionManager::fen() const {
 }
 
 void PositionManager::set(const std::string& fen, PositionManager& p) {
+	for (int i = 0; i < NPIECES; i++) p.piece_bb[i] = 0;
+	for (int i = 0; i < NSQUARES; i++) p.board[i] = NO_PIECE;
+	p.hash = 0;
+	p.game_ply = 0;
+	p.history[0] = UndoInfo();
+	p.checkers = 0;
+	p.pinned = 0;
+
 	int square = A8;
 	for (char ch : fen.substr(0, fen.find(' '))) {
 		if (isdigit(ch))
@@ -80,6 +93,7 @@ void PositionManager::set(const std::string& fen, PositionManager& p) {
 
 	ss >> token;
 	p.side_to_play = token == 'w' ? WHITE : BLACK;
+	if (p.side_to_play == BLACK) p.hash ^= zobrist::zobrist_side;
 
 	p.history[p.game_ply].entry = ALL_CASTLING_MASK;
 	while (ss >> token && !isspace(token)) {
@@ -98,8 +112,19 @@ void PositionManager::set(const std::string& fen, PositionManager& p) {
 			break;
 		}
 	}
+
+	// parse en passant square if present
+	std::string ep_str;
+	ss >> ep_str;
+	if (ep_str.length() == 2 && ep_str[0] >= 'a' && ep_str[0] <= 'h'
+		&& ep_str[1] >= '1' && ep_str[1] <= '8') {
+		File f = File(ep_str[0] - 'a');
+		Rank r = Rank(ep_str[1] - '1');
+		p.history[p.game_ply].epsq = create_square(f, r);
+		p.hash ^= zobrist::zobrist_ep[f];
+	}
 }
-	
+
 
 void PositionManager::move_piece(Square from, Square to) {
 	hash ^= zobrist::zobrist_table[board[from]][from] ^ zobrist::zobrist_table[board[from]][to]
@@ -117,4 +142,3 @@ void PositionManager::move_piece_quiet(Square from, Square to) {
 	board[to] = board[from];
 	board[from] = NO_PIECE;
 }
-

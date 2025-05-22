@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
         else if (command == "selfplay") {
             int games = 10;
             int depth = 5;
-			int useTimeControl = false;
+			bool useTimeControl = false;
 			int msPerMove = 1000;
 			bool useOpeningBook = false;
             
@@ -117,7 +117,7 @@ int main(int argc, char* argv[]) {
 			}
             ChessEngine engine;
 			std::cout << "Running " << games << " self-play games with " << (useTimeControl ? (std::to_string(msPerMove) + "ms per move") : ("depth " + std::to_string(depth))) << (useOpeningBook ? " using opening book" : "") << std::endl;
-            MatchResult result = engine.selfPlayGames(games, depth, true, 1000, false);
+            MatchResult result = engine.selfPlayGames(games, depth, useTimeControl, msPerMove, useOpeningBook);
             result.print();
         } 
         else if (command == "benchmark") {

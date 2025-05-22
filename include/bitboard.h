@@ -18,7 +18,7 @@ public:
 	PRNG(uint64_t seed) : s(seed) {}
 	template<typename T> T rand() { return T(rand64()); }
 
-	template<typename T> 
+	template<typename T>
 	T sparse_rand() {
 		return T(rand64() & rand64() & rand64());
 	}
@@ -26,6 +26,8 @@ public:
 // zobrist keys
 namespace zobrist {
 	extern uint64_t zobrist_table[NPIECES][NSQUARES];
+	extern uint64_t zobrist_side;       // NEW: side-to-move key
+	extern uint64_t zobrist_ep[8];      // NEW: ep-file keys (for proper hashing of ep state)
 	extern void initialise_zobrist_keys();
 }
 
@@ -35,8 +37,8 @@ struct UndoInfo {
 	Square epsq;
 
 	constexpr UndoInfo() : entry(0), captured(NO_PIECE), epsq(NO_SQ) {}
-	
-	UndoInfo(const UndoInfo& prev) : 
+
+	UndoInfo(const UndoInfo& prev) :
 		entry(prev.entry), captured(NO_PIECE), epsq(NO_SQ) {}
 };
 
@@ -51,14 +53,14 @@ public:
 	Bitboard pinned;
 	Color side_to_play;
 	int game_ply;
-	
-	PositionManager() : piece_bb{ 0 }, side_to_play(WHITE), game_ply(0), board{}, 
+
+	PositionManager() : piece_bb{ 0 }, side_to_play(WHITE), game_ply(0), board{},
 		hash(0), pinned(0), checkers(0) {
-		
+
 		for (int i = 0; i < 64; i++) board[i] = NO_PIECE;
 		history[0] = UndoInfo();
 	}
-	
+
 	inline void put_piece(Piece pc, Square s) {
 		board[s] = pc;
 		piece_bb[pc] |= SQUARE_BB[s];
@@ -73,6 +75,11 @@ public:
 	void move_piece(Square from, Square to);
 	void move_piece_quiet(Square from, Square to);
 
+	// NEW: helpers for null-move pruning that keep hash consistent
+	inline void flip_side_hash() { hash ^= zobrist::zobrist_side; }
+	inline void xor_ep_hash(Square ep) {
+		if (ep != NO_SQ) hash ^= zobrist::zobrist_ep[file_of(ep)];
+	}
 
 	friend std::ostream& operator<<(std::ostream& os, const PositionManager& p);
 	static void set(const std::string& fen, PositionManager& p);
@@ -102,17 +109,17 @@ public:
 	template<Color Us>
 	Move *generate_legals(Move* list);
 };
-template<Color C> 
+template<Color C>
 inline Bitboard PositionManager::diagonal_sliders() const {
 	return C == WHITE ? piece_bb[WHITE_BISHOP] | piece_bb[WHITE_QUEEN] :
 		piece_bb[BLACK_BISHOP] | piece_bb[BLACK_QUEEN];
 }
-template<Color C> 
+template<Color C>
 inline Bitboard PositionManager::orthogonal_sliders() const {
 	return C == WHITE ? piece_bb[WHITE_ROOK] | piece_bb[WHITE_QUEEN] :
 		piece_bb[BLACK_ROOK] | piece_bb[BLACK_QUEEN];
 }
-template<Color C> 
+template<Color C>
 inline Bitboard PositionManager::all_pieces() const {
 	return C == WHITE ? piece_bb[WHITE_PAWN] | piece_bb[WHITE_KNIGHT] | piece_bb[WHITE_BISHOP] |
 		piece_bb[WHITE_ROOK] | piece_bb[WHITE_QUEEN] | piece_bb[WHITE_KING] :
@@ -120,7 +127,7 @@ inline Bitboard PositionManager::all_pieces() const {
 		piece_bb[BLACK_PAWN] | piece_bb[BLACK_KNIGHT] | piece_bb[BLACK_BISHOP] |
 		piece_bb[BLACK_ROOK] | piece_bb[BLACK_QUEEN] | piece_bb[BLACK_KING];
 }
-template<Color C> 
+template<Color C>
 inline Bitboard PositionManager::attackers_from(Square s, Bitboard occ) const {
 	return C == WHITE ? (pawn_attacks<BLACK>(s) & piece_bb[WHITE_PAWN]) |
 		(attacks<KNIGHT>(s, occ) & piece_bb[WHITE_KNIGHT]) |
@@ -148,7 +155,7 @@ void PositionManager::play(const Move m) {
 		break;
 	case DOUBLE_PUSH:
 		move_piece_quiet(m.from(), m.to());
-			
+
 		history[game_ply].epsq = m.from() + relative_dir<C>(NORTH);
 		break;
 	case OO:
@@ -158,11 +165,11 @@ void PositionManager::play(const Move m) {
 		} else {
 			move_piece_quiet(E8, G8);
 			move_piece_quiet(H8, F8);
-		}			
+		}
 		break;
 	case OOO:
 		if (C == WHITE) {
-			move_piece_quiet(E1, C1); 
+			move_piece_quiet(E1, C1);
 			move_piece_quiet(A1, D1);
 		} else {
 			move_piece_quiet(E8, C8);
@@ -193,7 +200,7 @@ void PositionManager::play(const Move m) {
 		remove_piece(m.from());
 		history[game_ply].captured = board[m.to()];
 		remove_piece(m.to());
-		
+
 		put_piece(make_piece(C, KNIGHT), m.to());
 		break;
 	case PC_BISHOP:
@@ -220,7 +227,7 @@ void PositionManager::play(const Move m) {
 	case CAPTURE:
 		history[game_ply].captured = board[m.to()];
 		move_piece(m.from(), m.to());
-		
+
 		break;
 	}
 }
@@ -299,17 +306,17 @@ Move* PositionManager::generate_legals(Move* list) {
 	const Bitboard their_orth_sliders = orthogonal_sliders<Them>();
 
 	Bitboard b1, b2, b3;
-	
+
 	Bitboard danger = 0;
 
 	danger |= pawn_attacks<Them>(bitboard_of(Them, PAWN)) | attacks<KING>(their_king, all);
-	
-	b1 = bitboard_of(Them, KNIGHT); 
+
+	b1 = bitboard_of(Them, KNIGHT);
 	while (b1) danger |= attacks<KNIGHT>(pop_lsb(&b1), all);
-	
+
 	b1 = their_diag_sliders;
 	while (b1) danger |= attacks<BISHOP>(pop_lsb(&b1), all ^ SQUARE_BB[our_king]);
-	
+
 	b1 = their_orth_sliders;
 	while (b1) danger |= attacks<ROOK>(pop_lsb(&b1), all ^ SQUARE_BB[our_king]);
 
@@ -319,11 +326,11 @@ Move* PositionManager::generate_legals(Move* list) {
 
 	Bitboard capture_mask;
 	Bitboard quiet_mask;
-	
+
 	Square s;
 	checkers = attacks<KNIGHT>(our_king, all) & bitboard_of(Them, KNIGHT)
 		| pawn_attacks<Us>(our_king) & bitboard_of(Them, PAWN);
-	
+
 	Bitboard candidates = attacks<ROOK>(our_king, them_bb) & their_orth_sliders
 		| attacks<BISHOP>(our_king, them_bb) & their_diag_sliders;
 
@@ -331,7 +338,7 @@ Move* PositionManager::generate_legals(Move* list) {
 	while (candidates) {
 		s = pop_lsb(&candidates);
 		b1 = SQUARES_BETWEEN_BB[our_king][s] & us_bb;
-		
+
 		if (b1 == 0) checkers ^= SQUARE_BB[s];
 		else if ((b1 & b1 - 1) == 0) pinned ^= b1;
 	}
@@ -342,12 +349,12 @@ Move* PositionManager::generate_legals(Move* list) {
 	case 2:
 		return list;
 	case 1: {
-		
+
 		Square checker_square = bsf(checkers);
 
 		switch (board[checker_square]) {
 		case make_piece(Them, PAWN):
-		
+
 			if (checkers == shift<relative_dir<Us>(SOUTH)>(SQUARE_BB[history[game_ply].epsq])) {
 				b1 = pawn_attacks<Them>(history[game_ply].epsq) & bitboard_of(Us, PAWN) & not_pinned;
 				while (b1) *list++ = Move(pop_lsb(&b1), history[game_ply].epsq, EN_PASSANT);
@@ -360,7 +367,7 @@ Move* PositionManager::generate_legals(Move* list) {
 			return list;
 		default:
 			capture_mask = checkers;
-			
+
 			quiet_mask = SQUARES_BETWEEN_BB[our_king][checker_square];
 			break;
 		}
@@ -370,7 +377,7 @@ Move* PositionManager::generate_legals(Move* list) {
 
 	default:
 		capture_mask = them_bb;
-		
+
 		quiet_mask = ~all;
 
 		if (history[game_ply].epsq != NO_SQ) {
@@ -378,14 +385,14 @@ Move* PositionManager::generate_legals(Move* list) {
 			b1 = b2 & not_pinned;
 			while (b1) {
 				s = pop_lsb(&b1);
-				
+
 				if ((sliding_attacks(our_king, all ^ SQUARE_BB[s]
 					^ shift<relative_dir<Us>(SOUTH)>(SQUARE_BB[history[game_ply].epsq]),
 					MASK_RANK[rank_of(our_king)]) &
 					their_orth_sliders) == 0)
 						*list++ = Move(s, history[game_ply].epsq, EN_PASSANT);
 			}
-			
+
 			b1 = b2 & pinned & LINE[history[game_ply].epsq][our_king];
 			if (b1) {
 				*list++ = Move(bsf(b1), history[game_ply].epsq, EN_PASSANT);
@@ -418,7 +425,7 @@ Move* PositionManager::generate_legals(Move* list) {
 			else {
 				b2 = pawn_attacks<Us>(s) & them_bb & LINE[s][our_king];
 				list = make<CAPTURE>(s, b2, list);
-				
+
 				b2 = shift<relative_dir<Us>(NORTH)>(SQUARE_BB[s]) & ~all & LINE[our_king][s];
 				b3 = shift<relative_dir<Us>(NORTH)>(b2 &
 					MASK_RANK[relative_rank<Us>(RANK3)]) & ~all & LINE[our_king][s];
@@ -454,11 +461,11 @@ Move* PositionManager::generate_legals(Move* list) {
 	}
 
 	b1 = bitboard_of(Us, PAWN) & not_pinned & ~MASK_RANK[relative_rank<Us>(RANK7)];
-	
+
 	b2 = shift<relative_dir<Us>(NORTH)>(b1) & ~all;
-	
+
 	b3 = shift<relative_dir<Us>(NORTH)>(b2 & MASK_RANK[relative_rank<Us>(RANK3)]) & quiet_mask;
-	
+
 	b2 &= quiet_mask;
 
 	while (b2) {
@@ -524,18 +531,20 @@ public:
 
 	const Move* begin() const { return list; }
 	const Move* end() const { return last; }
+	Move* begin_mut() { return list; }
+	Move* end_mut() { return last; }
 	size_t size() const { return last - list; }
 private:
 	Move list[218];
 	Move *last;
 };
 
-template<Color C> 
+template<Color C>
 inline bool can_castle_short(const PositionManager& p) {
 	return !(p.history[p.ply()].entry & oo_mask<C>())
 		&& !(p.all_pieces<WHITE>() | p.all_pieces<BLACK>() & oo_blockers_mask<C>());
 }
-template<Color C> 
+template<Color C>
 inline bool can_castle_long(const PositionManager& p) {
 	return !(p.history[p.ply()].entry & ooo_mask<C>())
 		&& !(p.all_pieces<WHITE>() | p.all_pieces<BLACK>() & ooo_blockers_mask<C>()

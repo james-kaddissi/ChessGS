@@ -1,6 +1,7 @@
 #include "lookup_tables.h"
 #include "chess_types.h"
 #include <iostream>
+#include <cstring>
 
 const Bitboard KING_ATTACKS[64] = {
 	0x302, 0x705, 0xe0a, 0x1c14,

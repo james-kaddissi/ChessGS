@@ -1,0 +1,57 @@
+[paths]
+stockfish_path = "/usr/local/bin/stockfish"
+pgn_dir = "./pgns"
+dataset_path = "./chess_dataset.json"
+output_dir = "./outputs/chess-grpo"
+run_name = "chess-grpo-v1"
+
+[model]
+name = "Qwen/Qwen2.5-14B-Instruct"
+
+[dataset]
+max_games = 50000
+positions_per_game = 8
+min_elo = 2400
+sf_dataset_depth = 20
+num_candidates = 5
+
+[training]
+sample_size = 5000
+learning_rate = 1e-6
+warmup_ratio = 0.05
+weight_decay = 0.1
+num_epochs = 3
+batch_size = 1
+grad_accum_steps = 8
+num_generations = 8
+max_prompt_length = 1024
+max_completion_len = 1024
+save_steps = 200
+max_grad_norm = 0.05
+
+[lora]
+r = 64
+alpha = 128
+dropout = 0.05
+
+[rewards]
+# [format, legality, ranking, best_move_quality]
+weights = [0.15, 0.30, 0.35, 0.20]
+
+[prompt]
+system = """You are a chess position analyst. Given a chess position and a list of candidate moves, rank them from best to worst and explain your strategic reasoning.
+
+Respond in exactly this format:
+<reasoning>
+Analyze the position and each candidate move strategically. Consider pawn structure, king safety, piece activity, and long-term plans.
+</reasoning>
+<ranking>
+1. [UCI move] - [one line reason]
+2. [UCI move] - [one line reason]
+3. [UCI move] - [one line reason]
+4. [UCI move] - [one line reason]
+5. [UCI move] - [one line reason]
+</ranking>
+<best>
+[UCI move]
+</best>"""

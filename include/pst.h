@@ -10,3 +10,5 @@ extern const int MG_ROOK_PST[64];
 extern const int EG_ROOK_PST[64];
 extern const int MG_QUEEN_PST[64];
 extern const int EG_QUEEN_PST[64];
+extern const int MG_KING_PST[64];
+extern const int EG_KING_PST[64];
