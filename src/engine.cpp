@@ -1,22 +1,25 @@
 #include "engine.h"
 #include "pst.h"
-#include <cstring>
-#include <sstream>
-#include <iostream>
-#include <fstream>
 #include <chrono>
-#include <iomanip>
 #include <cmath>
-#include <algorithm>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 #include <SDL2/SDL.h>
+#include <algorithm>
 
-// =============================================================================
-//  CONSTRUCTOR / DESTRUCTOR
-// =============================================================================
+std::vector<ChessEngine::IterationInfo> ChessEngine::drainIterationLog() {
+    std::lock_guard<std::mutex> lk(iteration_log_mutex);
+    std::vector<IterationInfo> out;
+    out.swap(iteration_log);
+    return out;
+}
 
 ChessEngine::ChessEngine() : tt(TT_SIZE) {
-    // Zero-initialize the TT
     std::memset(tt.data(), 0, tt.size() * sizeof(TTEntry));
+    tt_age = 0;
 
     last_score = 0;
     total_nodes = 0;
@@ -30,6 +33,7 @@ ChessEngine::ChessEngine() : tt(TT_SIZE) {
         killer_moves[i][0] = Move();
         killer_moves[i][1] = Move();
     }
+    initLmrTable();
     resetSearchStats();
 
     resetToStartingPosition();
@@ -38,7 +42,6 @@ ChessEngine::ChessEngine() : tt(TT_SIZE) {
         if (std::ifstream("book.bin").good()) {
             loadOpeningBook("book.bin");
         } else {
-            // Quietly skip if missing; not having a book is fine.
             openingBook.clear();
         }
     } catch (...) {
@@ -48,10 +51,6 @@ ChessEngine::ChessEngine() : tt(TT_SIZE) {
 }
 
 ChessEngine::~ChessEngine() {}
-
-// =============================================================================
-//  POSITION / STATE
-// =============================================================================
 
 void ChessEngine::resetToStartingPosition() {
     PositionManager::set(DEFAULT_FEN, position);
@@ -90,8 +89,6 @@ bool ChessEngine::makeMove(const Move& move) {
     } else {
         position.play<BLACK>(move);
     }
-    // Flip side-to-move zobrist (PositionManager::play doesn't do this itself
-    // because the original engine's hash didn't include side-to-move).
     position.flip_side_hash();
     repetition_history.push_back(position.get_hash());
     return true;
@@ -106,7 +103,6 @@ void ChessEngine::unmakeMove() {
     moveStack.pop_back();
     if (!repetition_history.empty()) repetition_history.pop_back();
 
-    // Flip side hash back BEFORE undoing piece movement
     position.flip_side_hash();
 
     Color turnBeforeUndo = position.turn();
@@ -126,8 +122,6 @@ bool ChessEngine::isInCheck(Color side) const {
 }
 
 bool ChessEngine::isCheckmate() const {
-    // Use a const_cast since generate_legals isn't const, but it doesn't
-    // mutate the parts of position we care about (only checkers/pinned).
     PositionManager& p = const_cast<PositionManager&>(position);
     if (position.turn() == WHITE) {
         MoveList<WHITE> list(p);
@@ -148,10 +142,6 @@ bool ChessEngine::isStalemate() const {
         return !position.in_check<BLACK>() && list.size() == 0;
     }
 }
-
-// =============================================================================
-//  MOVE FORMATTING
-// =============================================================================
 
 std::string ChessEngine::moveToString(const Move& move) const {
     std::stringstream ss;
@@ -188,10 +178,6 @@ std::string ChessEngine::moveToUCI(const Move& move) const {
     else if (f == PR_QUEEN || f == PC_QUEEN) s += 'q';
     return s;
 }
-
-// =============================================================================
-//  STATS / ANALYSIS
-// =============================================================================
 
 void ChessEngine::resetSearchStats() {
     searchStats = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -245,10 +231,6 @@ void ChessEngine::printSearchStats() {
               << " - Hash used: " << searchStats.hash_used << "\n"
               << " - Moves searched: " << searchStats.moves_searched << "\n";
 }
-
-// =============================================================================
-//  PERFT
-// =============================================================================
 
 uint64_t ChessEngine::perft(int depth) {
     if (depth == 0) return 1;
@@ -311,10 +293,6 @@ void ChessEngine::testPerft() {
     std::cout << "Passed " << passed << "/" << tests.size() << " tests\n";
 }
 
-// =============================================================================
-//  SELF-PLAY
-// =============================================================================
-
 MatchResult ChessEngine::selfPlayGames(int games, int depth, bool useTimeControl, int msPerMove, bool useOpeningBook) {
     MatchResult result;
 
@@ -336,7 +314,6 @@ MatchResult ChessEngine::selfPlayGames(int games, int depth, bool useTimeControl
             }
 
             if (move == Move()) {
-                // No legal move: should already be checkmate/stalemate
                 if (isInCheck(getSideToMove())) {
                     winner = (getSideToMove() == WHITE) ? 2 : 1;
                 } else {
@@ -368,10 +345,6 @@ MatchResult ChessEngine::selfPlayGames(int games, int depth, bool useTimeControl
 
     return result;
 }
-
-// =============================================================================
-//  TEST SUITE
-// =============================================================================
 
 void ChessEngine::runTestSuite(const std::string& filename) {
     std::ifstream file(filename);
@@ -413,10 +386,6 @@ void ChessEngine::runTestSuite(const std::string& filename) {
                   << " (" << (correct * 100.0 / total) << "%)\n";
     }
 }
-
-// =============================================================================
-//  UCI
-// =============================================================================
 
 void ChessEngine::uciLoop() {
     std::string line;

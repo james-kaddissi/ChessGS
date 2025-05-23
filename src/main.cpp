@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
 	zobrist::initialise_zobrist_keys();
 	
     if (argc < 2) {
-        Window window("ChessGS - Chess Game and Engine", 1024, 768);
+        Window window("ChessGS", 1024, 768);
         if (!window.Initialize()) {
             std::cerr << "Failed to initialize window" << std::endl;
             return 1;
@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
         std::string command = argv[1];
         
         if (command == "gui") {
-            Window window("ChessGS - Chess Game and Engine", 1024, 768);
+            Window window("ChessGS", 1024, 768);
             if (!window.Initialize()) {
                 std::cerr << "Failed to initialize window" << std::endl;
                 return 1;

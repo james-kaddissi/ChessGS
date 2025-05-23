@@ -17,7 +17,10 @@ static constexpr int PHASE_KNIGHT = 1;
 static constexpr int PHASE_BISHOP = 1;
 static constexpr int PHASE_ROOK = 2;
 static constexpr int PHASE_QUEEN = 4;
-static constexpr int PHASE_MAX = PHASE_KNIGHT * 4 + PHASE_BISHOP * 4 + PHASE_ROOK * 4 + PHASE_QUEEN * 2;
+static constexpr int PHASE_MAX =
+    PHASE_KNIGHT * 4 + PHASE_BISHOP * 4 + PHASE_ROOK * 4 + PHASE_QUEEN * 2;
+
+static constexpr int KING_SAFETY_CAP = 200;
 
 static inline int pst_index(Color c, Square sq) {
   return (c == WHITE) ? (sq ^ 56) : sq;
@@ -29,16 +32,15 @@ Bitboard ChessEngine::getFriendlyPieces(Color color) const {
 }
 
 int ChessEngine::eval() {
-  if (inEndgame()) {
-    return evalEndgame();
-  }
-
   int phase = game_phase();
   if (phase > PHASE_MAX)
     phase = PHASE_MAX;
 
   Score white = evaluate_color(WHITE);
   Score black = evaluate_color(BLACK);
+
+  white += evalEndgameTerms(WHITE);
+  black += evalEndgameTerms(BLACK);
 
   if (position.turn() == WHITE) {
     white.mg += MG_TEMPO;
@@ -123,12 +125,6 @@ Score ChessEngine::evalPawnStructure(Color color) {
         front_span_own_file |= SQUARE_BB[create_square(File(file), Rank(r))];
     }
 
-    Bitboard adjacent = 0;
-    if (file > 0)
-      adjacent |= MASK_FILE[file - 1];
-    if (file < 7)
-      adjacent |= MASK_FILE[file + 1];
-
     Bitboard adj_front = 0;
     if (color == WHITE) {
       for (int r = rank_of(sq) + 1; r <= RANK8; r++) {
@@ -204,9 +200,13 @@ Score ChessEngine::evalKingVulnerability(Color color) {
       queenThreats++;
   }
 
-  int threatScore = knightThreats * 20 + bishopThreats * 20 + rookThreats * 40 + queenThreats * 80;
+  int threatScore =
+      knightThreats * 20 + bishopThreats * 20 + rookThreats * 40 + queenThreats * 80;
   if (threatScore > 0) {
-    score.mg -= threatScore * threatScore / 50;
+    int penalty = (threatScore * threatScore) / 50;
+    if (penalty > KING_SAFETY_CAP)
+      penalty = KING_SAFETY_CAP;
+    score.mg -= penalty;
   }
   return score;
 }
@@ -214,6 +214,18 @@ Score ChessEngine::evalKingVulnerability(Color color) {
 int ChessEngine::count_material(Color color) {
   int material = 0;
   material += sparse_pop_count(position.bitboard_of(color, PAWN)) * PAWN_VALUE;
+  material +=
+      sparse_pop_count(position.bitboard_of(color, KNIGHT)) * KNIGHT_VALUE;
+  material +=
+      sparse_pop_count(position.bitboard_of(color, BISHOP)) * BISHOP_VALUE;
+  material += sparse_pop_count(position.bitboard_of(color, ROOK)) * ROOK_VALUE;
+  material +=
+      sparse_pop_count(position.bitboard_of(color, QUEEN)) * QUEEN_VALUE;
+  return material;
+}
+
+int ChessEngine::non_pawn_material(Color color) {
+  int material = 0;
   material +=
       sparse_pop_count(position.bitboard_of(color, KNIGHT)) * KNIGHT_VALUE;
   material +=
@@ -382,7 +394,7 @@ Score ChessEngine::evalQueens(Color color) {
     score.mg += MG_QUEEN_PST[idx];
     score.eg += EG_QUEEN_PST[idx];
 
-    // early development penalty for queen if king is still on back rank and hasn't moved
+    // early development penalty for queen if minor pieces are still home
     if (color == WHITE && rank_of(sq) > RANK2) {
       if (position.at(B1) == WHITE_KNIGHT)
         score.mg -= 2;
@@ -411,7 +423,7 @@ Score ChessEngine::evalQueens(Color color) {
     attack += sparse_pop_count(q_attacks & enemyKingZone);
   }
 
-  // mobility bonus.
+  // mobility bonus
   score.mg += 1 * (totalMobility - 14);
   score.eg += 2 * (totalMobility - 14);
   score.mg += 4 * attack;
@@ -431,54 +443,16 @@ Score ChessEngine::evalKing(Color color) {
   return score;
 }
 
-bool ChessEngine::inEndgame() {
-  bool noQueens = (position.bitboard_of(WHITE, QUEEN) |
-                   position.bitboard_of(BLACK, QUEEN)) == 0;
-
-  int totalNonPawnMaterial =
-      sparse_pop_count(position.bitboard_of(WHITE, KNIGHT)) * KNIGHT_VALUE +
-      sparse_pop_count(position.bitboard_of(WHITE, BISHOP)) * BISHOP_VALUE +
-      sparse_pop_count(position.bitboard_of(WHITE, ROOK)) * ROOK_VALUE +
-      sparse_pop_count(position.bitboard_of(WHITE, QUEEN)) * QUEEN_VALUE +
-      sparse_pop_count(position.bitboard_of(BLACK, KNIGHT)) * KNIGHT_VALUE +
-      sparse_pop_count(position.bitboard_of(BLACK, BISHOP)) * BISHOP_VALUE +
-      sparse_pop_count(position.bitboard_of(BLACK, ROOK)) * ROOK_VALUE +
-      sparse_pop_count(position.bitboard_of(BLACK, QUEEN)) * QUEEN_VALUE;
-
-  return noQueens || totalNonPawnMaterial < 1500;
-}
-
-int ChessEngine::evalEndgame() {
+Score ChessEngine::evalEndgameTerms(Color color) {
   Score score;
-  score += evaluate_color(WHITE) - evaluate_color(BLACK);
 
-  Square whiteKing = bsf(position.bitboard_of(WHITE, KING));
-  Square blackKing = bsf(position.bitboard_of(BLACK, KING));
+  Square king = bsf(position.bitboard_of(color, KING));
+  int kf = file_of(king);
+  int kr = rank_of(king);
+  int fileDist = std::max(3 - kf, kf - 4);
+  int rankDist = std::max(3 - kr, kr - 4);
+  int centerDist = fileDist + rankDist;
+  score.eg += -10 * centerDist;
 
-  int wkf = file_of(whiteKing);
-  int wkr = rank_of(whiteKing);
-  int bkf = file_of(blackKing);
-  int bkr = rank_of(blackKing);
-  int wfd = std::max(3 - wkf, wkf - 4);
-  int bfd = std::max(3 - bkf, bkf - 4);
-  int wrd = std::max(3 - wkr, wkr - 4);
-  int brd = std::max(3 - bkr, bkr - 4);
-
-  int wcd = wfd + wrd;
-  int bcd = bfd + brd;
-
-  score.eg += (bcd - wcd) * 10;
-
-  int kingDistance = std::max(std::abs(wkf - bkf), std::abs(wkr - bkr));
-
-  if (sparse_pop_count(position.bitboard_of(WHITE, PAWN) |
-                       position.bitboard_of(BLACK, PAWN)) == 0) {
-    bool pat = (kingDistance % 2 == 0) && (getSideToMove() == BLACK);
-    if (pat) {
-      score.eg += 20;
-    }
-  }
-
-  int perspective = (position.turn() == WHITE) ? 1 : -1;
-  return score.eg * perspective;
+  return score;
 }
