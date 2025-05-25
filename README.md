@@ -1,6 +1,6 @@
 # ChessGS
 
-A bitboard-based chess engine in C++ with an SDL2 GUI.
+A bitboard-based chess engine in C++ with an SDL3 GUI.
 UCI-compatible, currently plays at a level above amateurs. I lose most games.
 
 The longer-term goal of this project is to use it as a research vehicle for
@@ -18,7 +18,7 @@ testing whether learned positional heuristics can add measurable strength on top
   mobility, bishop-pair bonus, early-queen development penalty.
 - Repetition and insufficient-material draw detection.
 - Polyglot opening book reader (see caveat below).
-- UCI loop and a basic SDL2 GUI for play against the engine.
+- UCI loop and a basic SDL3 GUI for play against the engine.
 - Self-play harness for testing.
 
 ## Running

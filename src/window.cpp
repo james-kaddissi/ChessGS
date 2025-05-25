@@ -1,13 +1,20 @@
 #include "window.h"
+
+#include <algorithm>
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <string>
+
+static SDL_FRect MakeFRect(float x, float y, float w, float h) {
+  return SDL_FRect{x, y, w, h};
+}
 
 Window::Window(const std::string &title, int width, int height)
     : title(title), width(width), height(height), window(nullptr),
       renderer(nullptr), font(nullptr), isRunning(false), lastFrameTime(0),
-      selectedSquare(NO_SQ),
-      isPieceSelected(false) { // window layout design here
+      selectedSquare(NO_SQ), isPieceSelected(false) {
   rightPanelWidth = width / 3;
   bottomPanelHeight = height / 6;
   boardSize = std::min(width - rightPanelWidth, height - bottomPanelHeight);
@@ -16,54 +23,41 @@ Window::Window(const std::string &title, int width, int height)
 Window::~Window() { Shutdown(); }
 
 bool Window::Initialize() {
-  // initialize SDL
-  if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+  if (!SDL_Init(SDL_INIT_VIDEO)) {
     std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
     return false;
   }
-  // initialize image support
-  if (IMG_Init(IMG_INIT_PNG) == 0) {
-    std::cerr << "IMG_Init Error: " << IMG_GetError() << std::endl;
-    SDL_Quit();
-    return false;
-  }
-  // initalize text
-  if (TTF_Init() != 0) {
-    std::cerr << "TTF_Init Error: " << TTF_GetError() << std::endl;
-    IMG_Quit();
+
+  if (!TTF_Init()) {
+    std::cerr << "TTF_Init Error: " << SDL_GetError() << std::endl;
     SDL_Quit();
     return false;
   }
 
-  // setup the gui
-  window =
-      SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED,
-                       SDL_WINDOWPOS_CENTERED, width, height, SDL_WINDOW_SHOWN);
+  window = SDL_CreateWindow(title.c_str(), width, height, 0);
   if (!window) {
     std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
     TTF_Quit();
-    IMG_Quit();
     SDL_Quit();
     return false;
   }
 
-  renderer = SDL_CreateRenderer(
-      window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  renderer = SDL_CreateRenderer(window, nullptr);
   if (!renderer) {
     std::cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
     SDL_DestroyWindow(window);
     TTF_Quit();
-    IMG_Quit();
     SDL_Quit();
     return false;
   }
 
+  SDL_SetRenderVSync(renderer, 1);
+
   font = TTF_OpenFont("assets/Terminal.ttf", 18);
   if (!font) {
-    std::cerr << "Failed to load font: " << TTF_GetError() << std::endl;
+    std::cerr << "Failed to load font: " << SDL_GetError() << std::endl;
   }
 
-  // start engine
   engine.resetToStartingPosition();
 
   isRunning = true;
@@ -97,17 +91,18 @@ void Window::Shutdown() {
     TTF_CloseFont(font);
     font = nullptr;
   }
+
   if (renderer) {
     SDL_DestroyRenderer(renderer);
     renderer = nullptr;
   }
+
   if (window) {
     SDL_DestroyWindow(window);
     window = nullptr;
   }
 
   TTF_Quit();
-  IMG_Quit();
   SDL_Quit();
 }
 
@@ -123,6 +118,7 @@ void Window::SnapshotBoard() {
     snapshotPieces[i] = pt;
     snapshotColors[i] = c;
   }
+
   snapshotInCheck = engine.isInCheck(engine.getSideToMove());
 }
 
@@ -131,8 +127,9 @@ void Window::StartEngineSearch(int timeMs) {
 
   engineState.store(EngineState::Thinking);
 
-  if (engineThread.joinable())
+  if (engineThread.joinable()) {
     engineThread.join();
+  }
 
   engineThread = std::thread([this, timeMs]() {
     Move m = engine.getBestMoveWithTime(timeMs);
@@ -146,28 +143,32 @@ void Window::StopEngineSearch() {
     engine.stop();
     engineThread.join();
   }
+
   engineState.store(EngineState::Idle);
 }
 
 void Window::ProcessEvents() {
   SDL_Event event;
+
   while (SDL_PollEvent(&event)) {
     switch (event.type) {
-    case SDL_QUIT:
+    case SDL_EVENT_QUIT:
       isRunning = false;
       break;
 
-    case SDL_KEYDOWN:
-      if (event.key.keysym.sym == SDLK_ESCAPE) {
+    case SDL_EVENT_KEY_DOWN:
+      if (event.key.key == SDLK_ESCAPE) {
         isRunning = false;
-      } else if (event.key.keysym.sym == SDLK_u && !EngineIsBusy()) {
+      } else if (event.key.key == SDLK_U && !EngineIsBusy()) {
         engine.unmakeMove();
+
         selectedSquare = NO_SQ;
         isPieceSelected = false;
         legalMoves.clear();
 
         if (!moveHistory.empty()) {
           MoveHistoryEntry &last = moveHistory.back();
+
           if (!last.blackMove.empty()) {
             last.blackMove = "";
           } else {
@@ -177,13 +178,17 @@ void Window::ProcessEvents() {
       }
       break;
 
-    case SDL_MOUSEBUTTONDOWN:
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
       if (event.button.button == SDL_BUTTON_LEFT && !EngineIsBusy()) {
-        if (event.button.x < boardSize && event.button.y < boardSize) {
-          HandleBoardClick(event.button.x, event.button.y);
+        int mouseX = static_cast<int>(event.button.x);
+        int mouseY = static_cast<int>(event.button.y);
+
+        if (mouseX < boardSize && mouseY < boardSize) {
+          HandleBoardClick(mouseX, mouseY);
         }
       }
       break;
+
     default:
       break;
     }
@@ -197,10 +202,12 @@ void Window::Update() {
   (void)deltaTime;
 
   if (engineState.load() == EngineState::ResultReady) {
-    if (engineThread.joinable())
+    if (engineThread.joinable()) {
       engineThread.join();
+    }
 
     Move engineMove = pendingEngineMove;
+
     if (engineMove != Move()) {
       AddMoveToHistory(engineMove);
       engine.makeMove(engineMove);
@@ -208,11 +215,14 @@ void Window::Update() {
 
     engineState.store(EngineState::Idle);
   }
+
   auto fresh = engine.drainIterationLog();
+
   if (!fresh.empty()) {
     iterationLog.insert(iterationLog.end(),
                         std::make_move_iterator(fresh.begin()),
                         std::make_move_iterator(fresh.end()));
+
     if (iterationLog.size() > MAX_ITERATION_LOG_LINES) {
       iterationLog.erase(iterationLog.begin(),
                          iterationLog.begin() +
@@ -227,7 +237,6 @@ void Window::Render() {
 
   int squareSize = boardSize / 8;
 
-  // checkerboard
   for (int row = 0; row < 8; row++) {
     for (int col = 0; col < 8; col++) {
       if ((row + col) % 2 == 0) {
@@ -236,20 +245,18 @@ void Window::Render() {
         SDL_SetRenderDrawColor(renderer, 75, 115, 153, 255);
       }
 
-      SDL_Rect square = {col * squareSize, row * squareSize, squareSize,
-                         squareSize};
+      SDL_FRect square = MakeFRect(
+          static_cast<float>(col * squareSize),
+          static_cast<float>(row * squareSize),
+          static_cast<float>(squareSize),
+          static_cast<float>(squareSize));
 
       SDL_RenderFillRect(renderer, &square);
     }
   }
 
-  // highlighting
   DrawMoveHighlights(squareSize, squareSize);
-
-  // piece rendering
   DrawPieces(squareSize, squareSize);
-
-  // debug ui
   DrawUI();
 
   SDL_RenderPresent(renderer);
@@ -267,20 +274,22 @@ void Window::LoadPiecesTextures() {
   for (int color = 0; color < 2; color++) {
     for (int pieceType = 0; pieceType < 6; pieceType++) {
       SDL_Surface *surface = IMG_Load(pieceFiles[color][pieceType].c_str());
+
       if (!surface) {
         std::cerr << "Failed to load piece texture: "
                   << pieceFiles[color][pieceType] << std::endl;
-        std::cerr << "IMG_Load Error: " << IMG_GetError() << std::endl;
+        std::cerr << "IMG_Load Error: " << SDL_GetError() << std::endl;
         continue;
       }
 
       pieceTextures[color][pieceType] =
           SDL_CreateTextureFromSurface(renderer, surface);
-      SDL_FreeSurface(surface);
+
+      SDL_DestroySurface(surface);
 
       if (!pieceTextures[color][pieceType]) {
-        std::cerr << "Failed to create texture from surface: " << SDL_GetError()
-                  << std::endl;
+        std::cerr << "Failed to create texture from surface: "
+                  << SDL_GetError() << std::endl;
       }
     }
   }
@@ -310,11 +319,16 @@ void Window::DrawPieces(int squareWidth, int squareHeight) {
 
       if (pieceType != NONE) {
         int screenRank = 7 - rank;
-        SDL_Rect destRect = {file * squareWidth, screenRank * squareHeight,
-                             squareWidth, squareHeight};
+
+        SDL_FRect destRect = MakeFRect(
+            static_cast<float>(file * squareWidth),
+            static_cast<float>(screenRank * squareHeight),
+            static_cast<float>(squareWidth),
+            static_cast<float>(squareHeight));
+
         if (pieceTextures[pieceColor][pieceType]) {
-          SDL_RenderCopy(renderer, pieceTextures[pieceColor][pieceType], NULL,
-                         &destRect);
+          SDL_RenderTexture(renderer, pieceTextures[pieceColor][pieceType],
+                            nullptr, &destRect);
         }
       }
     }
@@ -337,11 +351,16 @@ void Window::DrawMoveHighlights(int squareWidth, int squareHeight) {
     SquareToCoordinates(selectedSquare, x, y);
 
     SDL_SetRenderDrawColor(renderer, 186, 202, 68, 255);
-    SDL_Rect highlightRect = {x, y, squareWidth, squareHeight};
+
+    SDL_FRect highlightRect = MakeFRect(
+        static_cast<float>(x),
+        static_cast<float>(y),
+        static_cast<float>(squareWidth),
+        static_cast<float>(squareHeight));
+
     SDL_RenderFillRect(renderer, &highlightRect);
   }
 
-  // draw circle for legal moves
   for (const Move &move : legalMoves) {
     Square to = getTo(move);
 
@@ -354,25 +373,33 @@ void Window::DrawMoveHighlights(int squareWidth, int squareHeight) {
 
     if (isCapture(move)) {
       SDL_SetRenderDrawColor(renderer, 209, 61, 61, 180);
-      SDL_Rect captureRect = {x, y, squareWidth, squareHeight};
+
+      SDL_FRect outerRect = MakeFRect(
+          static_cast<float>(x),
+          static_cast<float>(y),
+          static_cast<float>(squareWidth),
+          static_cast<float>(squareHeight));
+
+      SDL_RenderRect(renderer, &outerRect);
 
       int borderSize = 3;
-      SDL_Rect outerRect = captureRect;
-      SDL_RenderDrawRect(renderer, &outerRect);
 
-      captureRect.x += borderSize;
-      captureRect.y += borderSize;
-      captureRect.w -= 2 * borderSize;
-      captureRect.h -= 2 * borderSize;
+      SDL_FRect innerRect = MakeFRect(
+          static_cast<float>(x + borderSize),
+          static_cast<float>(y + borderSize),
+          static_cast<float>(squareWidth - 2 * borderSize),
+          static_cast<float>(squareHeight - 2 * borderSize));
 
-      SDL_RenderDrawRect(renderer, &captureRect);
+      SDL_RenderRect(renderer, &innerRect);
     } else {
       SDL_SetRenderDrawColor(renderer, 186, 202, 68, 180);
 
       for (int w = -radius; w <= radius; w++) {
         for (int h = -radius; h <= radius; h++) {
           if (w * w + h * h <= radius * radius) {
-            SDL_RenderDrawPoint(renderer, centerX + w, centerY + h);
+            SDL_RenderPoint(renderer,
+                            static_cast<float>(centerX + w),
+                            static_cast<float>(centerY + h));
           }
         }
       }
@@ -381,26 +408,39 @@ void Window::DrawMoveHighlights(int squareWidth, int squareHeight) {
 }
 
 void Window::DrawUI() {
-  // right panel
   SDL_SetRenderDrawColor(renderer, 44, 44, 44, 255);
-  SDL_Rect rightPanel = {boardSize, 0, rightPanelWidth,
-                         height - bottomPanelHeight};
+
+  SDL_FRect rightPanel = MakeFRect(
+      static_cast<float>(boardSize),
+      0.0f,
+      static_cast<float>(rightPanelWidth),
+      static_cast<float>(height - bottomPanelHeight));
+
   SDL_RenderFillRect(renderer, &rightPanel);
 
-  // debug panel
-  SDL_SetRenderDrawColor(renderer, 44, 44, 44, 255);
-  SDL_Rect bottomPanel = {0, boardSize, width, bottomPanelHeight};
+  SDL_FRect bottomPanel = MakeFRect(
+      0.0f,
+      static_cast<float>(boardSize),
+      static_cast<float>(width),
+      static_cast<float>(bottomPanelHeight));
+
   SDL_RenderFillRect(renderer, &bottomPanel);
 
   SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-  SDL_RenderDrawLine(renderer, boardSize, 0, boardSize,
-                     height - bottomPanelHeight);
-  SDL_RenderDrawLine(renderer, 0, boardSize, width, boardSize);
 
-  // write gamelog
+  SDL_RenderLine(renderer,
+                 static_cast<float>(boardSize),
+                 0.0f,
+                 static_cast<float>(boardSize),
+                 static_cast<float>(height - bottomPanelHeight));
+
+  SDL_RenderLine(renderer,
+                 0.0f,
+                 static_cast<float>(boardSize),
+                 static_cast<float>(width),
+                 static_cast<float>(boardSize));
+
   DrawMoveHistory();
-
-  // Draw debug panel in the bottom panel
   DrawDebugPanel();
 }
 
@@ -430,15 +470,17 @@ void Window::DrawMoveHistory() {
     y += lineHeight;
   }
 
-  // display current turn
   y += lineHeight * 2;
+
   std::string turnStr;
+
   if (EngineIsBusy()) {
     turnStr = "Turn: Engine (thinking)";
   } else {
     turnStr = "Turn: " +
               std::string(engine.getSideToMove() == WHITE ? "White" : "Black");
   }
+
   SDL_Color yellow = {255, 255, 0, 255};
   RenderText(turnStr, startX, y, yellow);
 }
@@ -448,6 +490,7 @@ const int DEPTH = 3;
 void Window::DrawDebugPanel() {
   int startX = 20;
   int startY = boardSize + 12;
+
   SDL_Color white = {255, 255, 255, 255};
   SDL_Color yellow = {255, 220, 100, 255};
   SDL_Color gray = {180, 180, 180, 255};
@@ -465,11 +508,14 @@ void Window::DrawDebugPanel() {
     std::ostringstream s;
     s << "DEBUG  |  " << (busy ? "ENGINE THINKING" : "IDLE") << "  |  "
       << (inCheck ? "CHECK" : "OK");
+
     RenderText(s.str(), startX, startY, busy ? yellow : white);
   }
+
   startY += lineH + 4;
 
   const auto &p = engine.progress();
+
   int curDepth = p.depth.load(std::memory_order_relaxed);
   int compDepth = p.completed_depth.load(std::memory_order_relaxed);
   uint64_t nodes = p.nodes.load(std::memory_order_relaxed);
@@ -478,41 +524,52 @@ void Window::DrawDebugPanel() {
   uint32_t t0 = p.start_ms.load(std::memory_order_relaxed);
   uint32_t elapsed_ms = busy && t0 ? (SDL_GetTicks() - t0) : 0;
   double elapsed_s = elapsed_ms / 1000.0;
-  uint64_t nps = elapsed_s > 0.001 ? (uint64_t)(nodes / elapsed_s) : 0;
+  uint64_t nps = elapsed_s > 0.001 ? static_cast<uint64_t>(nodes / elapsed_s) : 0;
 
   auto fmtK = [](uint64_t n) -> std::string {
     std::ostringstream s;
-    if (n >= 1'000'000)
+
+    if (n >= 1'000'000) {
       s << std::fixed << std::setprecision(2) << (n / 1'000'000.0) << "M";
-    else if (n >= 1'000)
+    } else if (n >= 1'000) {
       s << std::fixed << std::setprecision(1) << (n / 1'000.0) << "k";
-    else
+    } else {
       s << n;
+    }
+
     return s.str();
   };
 
   {
     std::ostringstream s;
+
     s << "depth " << curDepth << "/" << compDepth << "  nodes " << fmtK(nodes)
       << " (q " << fmtK(qn) << ")"
       << "  nps " << fmtK(nps) << "  t " << std::fixed << std::setprecision(1)
       << elapsed_s << "s"
       << "  score " << std::showpos << score << std::noshowpos << "cp";
+
     RenderText(s.str(), startX, startY, busy ? white : gray);
   }
+
   startY += lineH + 6;
 
   RenderText("ITERATIONS", startX, startY, dimGray);
   startY += lineH;
 
   int linesAvailable = (height - startY - 4) / lineH;
-  if (linesAvailable < 1)
-    return;
 
-  int firstIdx = std::max(0, (int)iterationLog.size() - linesAvailable);
-  for (int i = firstIdx; i < (int)iterationLog.size(); i++) {
+  if (linesAvailable < 1) {
+    return;
+  }
+
+  int firstIdx = std::max(0, static_cast<int>(iterationLog.size()) - linesAvailable);
+
+  for (int i = firstIdx; i < static_cast<int>(iterationLog.size()); i++) {
     const auto &it = iterationLog[i];
+
     std::ostringstream s;
+
     s << "d" << std::setw(2) << it.depth << "  " << std::setw(8) << std::right
       << fmtK(it.nodes) << "  " << std::setw(5) << it.time_ms << "ms"
       << "  " << (it.score_cp >= 0 ? "+" : "") << it.score_cp << "cp"
@@ -521,13 +578,16 @@ void Window::DrawDebugPanel() {
       << "  bf " << std::fixed << std::setprecision(2)
       << (it.effective_branching_x100 / 100.0) << "  " << it.pv;
 
-    SDL_Color c = (i == (int)iterationLog.size() - 1) ? white : gray;
-    if (i == (int)iterationLog.size() - 1) {
-      if (it.score_cp > 50)
+    SDL_Color c = (i == static_cast<int>(iterationLog.size()) - 1) ? white : gray;
+
+    if (i == static_cast<int>(iterationLog.size()) - 1) {
+      if (it.score_cp > 50) {
         c = green;
-      else if (it.score_cp < -50)
+      } else if (it.score_cp < -50) {
         c = red;
+      }
     }
+
     RenderText(s.str(), startX, startY, c);
     startY += lineH;
   }
@@ -537,19 +597,32 @@ void Window::RenderText(const std::string &text, int x, int y,
                         SDL_Color color) {
   if (!font) {
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-    SDL_Rect textRect = {x, y, static_cast<int>(text.length() * 8), 18};
-    SDL_RenderDrawRect(renderer, &textRect);
+
+    SDL_FRect textRect = MakeFRect(
+        static_cast<float>(x),
+        static_cast<float>(y),
+        static_cast<float>(text.length() * 8),
+        18.0f);
+
+    SDL_RenderRect(renderer, &textRect);
     return;
   }
 
   SDL_Texture *textTexture = CreateTextTexture(text, color);
+
   if (textTexture) {
-    int textWidth, textHeight;
-    SDL_QueryTexture(textTexture, NULL, NULL, &textWidth, &textHeight);
+    float textWidth = 0.0f;
+    float textHeight = 0.0f;
 
-    SDL_Rect destRect = {x, y, textWidth, textHeight};
-    SDL_RenderCopy(renderer, textTexture, NULL, &destRect);
+    SDL_GetTextureSize(textTexture, &textWidth, &textHeight);
 
+    SDL_FRect destRect = MakeFRect(
+        static_cast<float>(x),
+        static_cast<float>(y),
+        textWidth,
+        textHeight);
+
+    SDL_RenderTexture(renderer, textTexture, nullptr, &destRect);
     SDL_DestroyTexture(textTexture);
   }
 }
@@ -560,14 +633,17 @@ SDL_Texture *Window::CreateTextTexture(const std::string &text,
     return nullptr;
   }
 
-  SDL_Surface *surface = TTF_RenderText_Blended(font, text.c_str(), color);
+  SDL_Surface *surface =
+      TTF_RenderText_Blended(font, text.c_str(), text.length(), color);
+
   if (!surface) {
-    std::cerr << "Failed to render text: " << TTF_GetError() << std::endl;
+    std::cerr << "Failed to render text: " << SDL_GetError() << std::endl;
     return nullptr;
   }
 
   SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-  SDL_FreeSurface(surface);
+
+  SDL_DestroySurface(surface);
 
   if (!texture) {
     std::cerr << "Failed to create texture from rendered text: "
@@ -630,7 +706,7 @@ void Window::HandleBoardClick(int mouseX, int mouseY) {
         }
       }
     }
-  } else { // selecting when a piece is already selected
+  } else {
     for (const Move &move : legalMoves) {
       if (getTo(move) == clickedSquare) {
         AddMoveToHistory(move);
@@ -672,7 +748,7 @@ void Window::AddMoveToHistory(Move move) {
 
   if (engine.getSideToMove() == WHITE) {
     MoveHistoryEntry entry;
-    entry.moveNumber = moveHistory.size() + 1;
+    entry.moveNumber = static_cast<int>(moveHistory.size()) + 1;
     entry.whiteMove = moveNotation;
     entry.blackMove = "";
     moveHistory.push_back(entry);

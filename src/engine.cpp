@@ -7,7 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <algorithm>
 
 std::vector<ChessEngine::IterationInfo> ChessEngine::drainIterationLog() {
