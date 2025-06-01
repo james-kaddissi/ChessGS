@@ -22,6 +22,11 @@ public:
     bool Initialize();
     void RenderLoop();
     void Shutdown();
+    ChessEngine::GameResult gameResult = ChessEngine::GameResult::Ongoing;
+
+    void CheckGameOver();
+    void NewGame();
+    void DrawGameOverOverlay();
 
 private:
     enum class EngineState {

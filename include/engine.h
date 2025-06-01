@@ -134,6 +134,16 @@ public:
     int fail_high_first_pct;
     int effective_branching_x100;
   };
+  enum class GameResult {
+    Ongoing,
+    WhiteWinsCheckmate,
+    BlackWinsCheckmate,
+    DrawStalemate,
+    DrawFiftyMove,
+    DrawThreefold,
+    DrawInsufficientMaterial,
+};
+
   ChessEngine();
   ~ChessEngine();
 
@@ -154,6 +164,10 @@ public:
   bool isStalemate() const;
   bool isRepetition() const;
   bool isDrawByInsufficientMaterial() const;
+  bool isFiftyMoveRule() const;
+  bool isThreefoldRepetition() const;
+  GameResult getGameResult();
+  static std::string gameResultToString(GameResult r);
 
   // formatting
   std::string moveToString(const Move &move) const;

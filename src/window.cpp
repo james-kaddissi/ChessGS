@@ -175,6 +175,8 @@ void Window::ProcessEvents() {
             moveHistory.pop_back();
           }
         }
+      } else if (event.key.key == SDLK_N) {
+        NewGame();
       }
       break;
 
@@ -211,6 +213,7 @@ void Window::Update() {
     if (engineMove != Move()) {
       AddMoveToHistory(engineMove);
       engine.makeMove(engineMove);
+      CheckGameOver();
     }
 
     engineState.store(EngineState::Idle);
@@ -245,11 +248,10 @@ void Window::Render() {
         SDL_SetRenderDrawColor(renderer, 75, 115, 153, 255);
       }
 
-      SDL_FRect square = MakeFRect(
-          static_cast<float>(col * squareSize),
-          static_cast<float>(row * squareSize),
-          static_cast<float>(squareSize),
-          static_cast<float>(squareSize));
+      SDL_FRect square = MakeFRect(static_cast<float>(col * squareSize),
+                                   static_cast<float>(row * squareSize),
+                                   static_cast<float>(squareSize),
+                                   static_cast<float>(squareSize));
 
       SDL_RenderFillRect(renderer, &square);
     }
@@ -258,6 +260,7 @@ void Window::Render() {
   DrawMoveHighlights(squareSize, squareSize);
   DrawPieces(squareSize, squareSize);
   DrawUI();
+  DrawGameOverOverlay();
 
   SDL_RenderPresent(renderer);
 }
@@ -288,8 +291,8 @@ void Window::LoadPiecesTextures() {
       SDL_DestroySurface(surface);
 
       if (!pieceTextures[color][pieceType]) {
-        std::cerr << "Failed to create texture from surface: "
-                  << SDL_GetError() << std::endl;
+        std::cerr << "Failed to create texture from surface: " << SDL_GetError()
+                  << std::endl;
       }
     }
   }
@@ -323,8 +326,7 @@ void Window::DrawPieces(int squareWidth, int squareHeight) {
         SDL_FRect destRect = MakeFRect(
             static_cast<float>(file * squareWidth),
             static_cast<float>(screenRank * squareHeight),
-            static_cast<float>(squareWidth),
-            static_cast<float>(squareHeight));
+            static_cast<float>(squareWidth), static_cast<float>(squareHeight));
 
         if (pieceTextures[pieceColor][pieceType]) {
           SDL_RenderTexture(renderer, pieceTextures[pieceColor][pieceType],
@@ -353,10 +355,8 @@ void Window::DrawMoveHighlights(int squareWidth, int squareHeight) {
     SDL_SetRenderDrawColor(renderer, 186, 202, 68, 255);
 
     SDL_FRect highlightRect = MakeFRect(
-        static_cast<float>(x),
-        static_cast<float>(y),
-        static_cast<float>(squareWidth),
-        static_cast<float>(squareHeight));
+        static_cast<float>(x), static_cast<float>(y),
+        static_cast<float>(squareWidth), static_cast<float>(squareHeight));
 
     SDL_RenderFillRect(renderer, &highlightRect);
   }
@@ -375,20 +375,18 @@ void Window::DrawMoveHighlights(int squareWidth, int squareHeight) {
       SDL_SetRenderDrawColor(renderer, 209, 61, 61, 180);
 
       SDL_FRect outerRect = MakeFRect(
-          static_cast<float>(x),
-          static_cast<float>(y),
-          static_cast<float>(squareWidth),
-          static_cast<float>(squareHeight));
+          static_cast<float>(x), static_cast<float>(y),
+          static_cast<float>(squareWidth), static_cast<float>(squareHeight));
 
       SDL_RenderRect(renderer, &outerRect);
 
       int borderSize = 3;
 
-      SDL_FRect innerRect = MakeFRect(
-          static_cast<float>(x + borderSize),
-          static_cast<float>(y + borderSize),
-          static_cast<float>(squareWidth - 2 * borderSize),
-          static_cast<float>(squareHeight - 2 * borderSize));
+      SDL_FRect innerRect =
+          MakeFRect(static_cast<float>(x + borderSize),
+                    static_cast<float>(y + borderSize),
+                    static_cast<float>(squareWidth - 2 * borderSize),
+                    static_cast<float>(squareHeight - 2 * borderSize));
 
       SDL_RenderRect(renderer, &innerRect);
     } else {
@@ -397,8 +395,7 @@ void Window::DrawMoveHighlights(int squareWidth, int squareHeight) {
       for (int w = -radius; w <= radius; w++) {
         for (int h = -radius; h <= radius; h++) {
           if (w * w + h * h <= radius * radius) {
-            SDL_RenderPoint(renderer,
-                            static_cast<float>(centerX + w),
+            SDL_RenderPoint(renderer, static_cast<float>(centerX + w),
                             static_cast<float>(centerY + h));
           }
         }
@@ -411,34 +408,25 @@ void Window::DrawUI() {
   SDL_SetRenderDrawColor(renderer, 44, 44, 44, 255);
 
   SDL_FRect rightPanel = MakeFRect(
-      static_cast<float>(boardSize),
-      0.0f,
-      static_cast<float>(rightPanelWidth),
+      static_cast<float>(boardSize), 0.0f, static_cast<float>(rightPanelWidth),
       static_cast<float>(height - bottomPanelHeight));
 
   SDL_RenderFillRect(renderer, &rightPanel);
 
-  SDL_FRect bottomPanel = MakeFRect(
-      0.0f,
-      static_cast<float>(boardSize),
-      static_cast<float>(width),
-      static_cast<float>(bottomPanelHeight));
+  SDL_FRect bottomPanel =
+      MakeFRect(0.0f, static_cast<float>(boardSize), static_cast<float>(width),
+                static_cast<float>(bottomPanelHeight));
 
   SDL_RenderFillRect(renderer, &bottomPanel);
 
   SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
 
-  SDL_RenderLine(renderer,
-                 static_cast<float>(boardSize),
-                 0.0f,
+  SDL_RenderLine(renderer, static_cast<float>(boardSize), 0.0f,
                  static_cast<float>(boardSize),
                  static_cast<float>(height - bottomPanelHeight));
 
-  SDL_RenderLine(renderer,
-                 0.0f,
-                 static_cast<float>(boardSize),
-                 static_cast<float>(width),
-                 static_cast<float>(boardSize));
+  SDL_RenderLine(renderer, 0.0f, static_cast<float>(boardSize),
+                 static_cast<float>(width), static_cast<float>(boardSize));
 
   DrawMoveHistory();
   DrawDebugPanel();
@@ -524,7 +512,8 @@ void Window::DrawDebugPanel() {
   uint32_t t0 = p.start_ms.load(std::memory_order_relaxed);
   uint32_t elapsed_ms = busy && t0 ? (SDL_GetTicks() - t0) : 0;
   double elapsed_s = elapsed_ms / 1000.0;
-  uint64_t nps = elapsed_s > 0.001 ? static_cast<uint64_t>(nodes / elapsed_s) : 0;
+  uint64_t nps =
+      elapsed_s > 0.001 ? static_cast<uint64_t>(nodes / elapsed_s) : 0;
 
   auto fmtK = [](uint64_t n) -> std::string {
     std::ostringstream s;
@@ -563,7 +552,8 @@ void Window::DrawDebugPanel() {
     return;
   }
 
-  int firstIdx = std::max(0, static_cast<int>(iterationLog.size()) - linesAvailable);
+  int firstIdx =
+      std::max(0, static_cast<int>(iterationLog.size()) - linesAvailable);
 
   for (int i = firstIdx; i < static_cast<int>(iterationLog.size()); i++) {
     const auto &it = iterationLog[i];
@@ -578,7 +568,8 @@ void Window::DrawDebugPanel() {
       << "  bf " << std::fixed << std::setprecision(2)
       << (it.effective_branching_x100 / 100.0) << "  " << it.pv;
 
-    SDL_Color c = (i == static_cast<int>(iterationLog.size()) - 1) ? white : gray;
+    SDL_Color c =
+        (i == static_cast<int>(iterationLog.size()) - 1) ? white : gray;
 
     if (i == static_cast<int>(iterationLog.size()) - 1) {
       if (it.score_cp > 50) {
@@ -598,11 +589,9 @@ void Window::RenderText(const std::string &text, int x, int y,
   if (!font) {
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
 
-    SDL_FRect textRect = MakeFRect(
-        static_cast<float>(x),
-        static_cast<float>(y),
-        static_cast<float>(text.length() * 8),
-        18.0f);
+    SDL_FRect textRect =
+        MakeFRect(static_cast<float>(x), static_cast<float>(y),
+                  static_cast<float>(text.length() * 8), 18.0f);
 
     SDL_RenderRect(renderer, &textRect);
     return;
@@ -616,11 +605,8 @@ void Window::RenderText(const std::string &text, int x, int y,
 
     SDL_GetTextureSize(textTexture, &textWidth, &textHeight);
 
-    SDL_FRect destRect = MakeFRect(
-        static_cast<float>(x),
-        static_cast<float>(y),
-        textWidth,
-        textHeight);
+    SDL_FRect destRect = MakeFRect(static_cast<float>(x), static_cast<float>(y),
+                                   textWidth, textHeight);
 
     SDL_RenderTexture(renderer, textTexture, nullptr, &destRect);
     SDL_DestroyTexture(textTexture);
@@ -683,6 +669,8 @@ void Window::SquareToCoordinates(Square sq, int &x, int &y) {
 }
 
 void Window::HandleBoardClick(int mouseX, int mouseY) {
+  if (gameResult != ChessEngine::GameResult::Ongoing)
+    return;
   Square clickedSquare = CoordinatesToSquare(mouseX, mouseY);
 
   if (clickedSquare == NO_SQ) {
@@ -715,6 +703,10 @@ void Window::HandleBoardClick(int mouseX, int mouseY) {
         selectedSquare = NO_SQ;
         isPieceSelected = false;
         legalMoves.clear();
+        CheckGameOver();
+        if (gameResult != ChessEngine::GameResult::Ongoing) {
+          return;
+        }
 
         StartEngineSearch(5000);
         return;
@@ -757,4 +749,67 @@ void Window::AddMoveToHistory(Move move) {
       moveHistory.back().blackMove = moveNotation;
     }
   }
+}
+
+void Window::CheckGameOver() { gameResult = engine.getGameResult(); }
+
+void Window::NewGame() {
+  StopEngineSearch();
+  engine.resetToStartingPosition();
+  selectedSquare = NO_SQ;
+  isPieceSelected = false;
+  legalMoves.clear();
+  moveHistory.clear();
+  iterationLog.clear();
+  gameResult = ChessEngine::GameResult::Ongoing;
+}
+
+void Window::DrawGameOverOverlay() {
+  if (gameResult == ChessEngine::GameResult::Ongoing)
+    return;
+
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 170);
+  SDL_FRect boardRect = MakeFRect(0, 0, static_cast<float>(boardSize),
+                                  static_cast<float>(boardSize));
+  SDL_RenderFillRect(renderer, &boardRect);
+
+  int cardW = boardSize * 3 / 4;
+  int cardH = boardSize / 3;
+  int cardX = (boardSize - cardW) / 2;
+  int cardY = (boardSize - cardH) / 2;
+
+  SDL_SetRenderDrawColor(renderer, 30, 30, 35, 240);
+  SDL_FRect card =
+      MakeFRect(static_cast<float>(cardX), static_cast<float>(cardY),
+                static_cast<float>(cardW), static_cast<float>(cardH));
+  SDL_RenderFillRect(renderer, &card);
+
+  SDL_SetRenderDrawColor(renderer, 200, 200, 210, 255);
+  SDL_RenderRect(renderer, &card);
+
+  std::string headline;
+  switch (gameResult) {
+  case ChessEngine::GameResult::WhiteWinsCheckmate:
+    headline = "WHITE WINS";
+    break;
+  case ChessEngine::GameResult::BlackWinsCheckmate:
+    headline = "BLACK WINS";
+    break;
+  default:
+    headline = "DRAW";
+    break;
+  }
+  std::string detail = ChessEngine::gameResultToString(gameResult);
+  std::string prompt = "Press N for new game";
+
+  SDL_Color white = {255, 255, 255, 255};
+  SDL_Color gray = {200, 200, 200, 255};
+  SDL_Color yellow = {255, 220, 100, 255};
+
+  int textX = cardX + 24;
+  int textY = cardY + 24;
+  RenderText(headline, textX, textY, white);
+  RenderText(detail, textX, textY + 36, gray);
+  RenderText(prompt, textX, textY + 80, yellow);
 }

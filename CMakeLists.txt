@@ -17,15 +17,16 @@ target_include_directories(engine PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-find_package(SDL3 REQUIRED)
-find_package(SDL3_image REQUIRED)
-find_package(SDL3_ttf REQUIRED)
+find_package(SDL3 REQUIRED CONFIG)
+find_package(SDL3_image REQUIRED CONFIG)
+find_package(SDL3_ttf REQUIRED CONFIG)
 
 target_link_libraries(engine PRIVATE
     SDL3::SDL3
     SDL3_image::SDL3_image
     SDL3_ttf::SDL3_ttf
 )
+
 if(TARGET SDL3::SDL3main)
     target_link_libraries(engine PRIVATE SDL3::SDL3main)
 endif()

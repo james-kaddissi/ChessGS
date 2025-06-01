@@ -26,8 +26,8 @@ public:
 // zobrist keys
 namespace zobrist {
 	extern uint64_t zobrist_table[NPIECES][NSQUARES];
-	extern uint64_t zobrist_side;       // NEW: side-to-move key
-	extern uint64_t zobrist_ep[8];      // NEW: ep-file keys (for proper hashing of ep state)
+	extern uint64_t zobrist_side;
+	extern uint64_t zobrist_ep[8];  
 	extern void initialise_zobrist_keys();
 }
 
@@ -35,11 +35,13 @@ struct UndoInfo {
 	Bitboard entry;
 	Piece captured;
 	Square epsq;
+	int halfmove_clock;
 
-	constexpr UndoInfo() : entry(0), captured(NO_PIECE), epsq(NO_SQ) {}
+	constexpr UndoInfo() : entry(0), captured(NO_PIECE), epsq(NO_SQ), halfmove_clock(0) {}
 
-	UndoInfo(const UndoInfo& prev) :
-		entry(prev.entry), captured(NO_PIECE), epsq(NO_SQ) {}
+    UndoInfo(const UndoInfo& prev) :
+        entry(prev.entry), captured(NO_PIECE), epsq(NO_SQ),
+        halfmove_clock(prev.halfmove_clock + 1) {}
 };
 
 class PositionManager {
@@ -75,7 +77,6 @@ public:
 	void move_piece(Square from, Square to);
 	void move_piece_quiet(Square from, Square to);
 
-	// NEW: helpers for null-move pruning that keep hash consistent
 	inline void flip_side_hash() { hash ^= zobrist::zobrist_side; }
 	inline void xor_ep_hash(Square ep) {
 		if (ep != NO_SQ) hash ^= zobrist::zobrist_ep[file_of(ep)];
@@ -108,6 +109,9 @@ public:
 
 	template<Color Us>
 	Move *generate_legals(Move* list);
+
+	inline int halfmove_clock() const { return history[game_ply].halfmove_clock; }
+	inline void reset_halfmove_clock() { history[game_ply].halfmove_clock = 0; }
 };
 template<Color C>
 inline Bitboard PositionManager::diagonal_sliders() const {
@@ -145,6 +149,12 @@ void PositionManager::play(const Move m) {
 	side_to_play = ~side_to_play;
 	++game_ply;
 	history[game_ply] = UndoInfo(history[game_ply - 1]);
+	PieceType movedPt = piece_type(board[m.from()]);
+	MoveFlags mf = m.flags();
+	bool isCapture = (mf & CAPTURE) != 0 || mf == EN_PASSANT;
+	if (movedPt == PAWN || isCapture) {
+		history[game_ply].halfmove_clock = 0;
+	}
 
 	MoveFlags type = m.flags();
 	history[game_ply].entry |= SQUARE_BB[m.to()] | SQUARE_BB[m.from()];

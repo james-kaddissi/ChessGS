@@ -65,7 +65,8 @@ std::string PositionManager::fen() const {
 		<< (history[game_ply].entry & BLACK_OOO_MASK ? "" : "q")
 		<< (history[game_ply].entry & ALL_CASTLING_MASK ? "- " : "")
 		<< (history[game_ply].epsq == NO_SQ ? " -" : SQUARE_STR[history[game_ply].epsq]);
-
+	fen << " " << history[game_ply].halfmove_clock;
+	fen << " 1";
 	return fen.str();
 }
 
@@ -122,6 +123,14 @@ void PositionManager::set(const std::string& fen, PositionManager& p) {
 		Rank r = Rank(ep_str[1] - '1');
 		p.history[p.game_ply].epsq = create_square(f, r);
 		p.hash ^= zobrist::zobrist_ep[f];
+	}
+	int hmc = 0;
+	ss >> hmc;
+	if (!ss.fail()) {
+		p.history[p.game_ply].halfmove_clock = hmc;
+	} else {
+		p.history[p.game_ply].halfmove_clock = 0;
+		ss.clear();
 	}
 }
 
